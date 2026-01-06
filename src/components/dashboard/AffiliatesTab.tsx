@@ -1,9 +1,11 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, Copy, Share2, Award } from "lucide-react";
+import { Users, Copy, Share2, Award, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const commissionLevels = [
   { level: 1, percentage: 25, color: "text-yellow-500", bg: "bg-yellow-500/10" },
@@ -32,10 +34,12 @@ const AffiliatesTab = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("affiliate_commissions")
-        .select("*")
+        .select(`
+          *,
+          source:profiles!affiliate_commissions_source_user_id_fkey (full_name)
+        `)
         .eq("beneficiary_id", user!.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
+        .order("created_at", { ascending: false });
       return data || [];
     },
     enabled: !!user,
@@ -45,6 +49,10 @@ const AffiliatesTab = () => {
     (sum, c) => sum + Number(c.amount),
     0
   ) || 0;
+
+  const level1Total = commissions?.filter(c => c.level === 1).reduce((sum, c) => sum + Number(c.amount), 0) || 0;
+  const level2Total = commissions?.filter(c => c.level === 2).reduce((sum, c) => sum + Number(c.amount), 0) || 0;
+  const level3Total = commissions?.filter(c => c.level === 3).reduce((sum, c) => sum + Number(c.amount), 0) || 0;
 
   const referralLink = `${window.location.origin}/register?ref=${profile?.referral_code}`;
 
@@ -63,6 +71,15 @@ const AffiliatesTab = () => {
     } else {
       copyLink();
     }
+  };
+
+  const getLevelBadge = (level: number) => {
+    const config = commissionLevels.find(l => l.level === level);
+    return (
+      <span className={`px-2 py-1 text-xs rounded-full ${config?.bg} ${config?.color}`}>
+        Nível {level} ({config?.percentage}%)
+      </span>
+    );
   };
 
   return (
@@ -116,33 +133,109 @@ const AffiliatesTab = () => {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-card rounded-xl p-4 border border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="w-4 h-4 text-primary" />
-            <span className="text-xs text-muted-foreground">Total Indicados</span>
+      {/* Stats by Level */}
+      <div>
+        <h2 className="text-lg font-semibold text-foreground mb-3">
+          Ganhos por Nível
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-card rounded-xl p-4 border border-border">
+            <div className="flex items-center gap-2 mb-2">
+              <Users className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Total Indicados</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              {referrals?.length || 0}
+            </p>
           </div>
-          <p className="text-2xl font-bold text-foreground">
-            {referrals?.length || 0}
-          </p>
-        </div>
 
-        <div className="bg-card rounded-xl p-4 border border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <Award className="w-4 h-4 text-green-500" />
-            <span className="text-xs text-muted-foreground">Total Ganho</span>
+          <div className="bg-card rounded-xl p-4 border border-border">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-4 h-4 text-green-500" />
+              <span className="text-xs text-muted-foreground">Total Ganho</span>
+            </div>
+            <p className="text-2xl font-bold text-green-500">
+              R$ {totalCommissions.toFixed(2)}
+            </p>
           </div>
-          <p className="text-2xl font-bold text-green-500">
-            R$ {totalCommissions.toFixed(2)}
-          </p>
+
+          <div className="bg-yellow-500/10 rounded-xl p-3 border border-border">
+            <p className="text-xs text-muted-foreground">Nível 1 (25%)</p>
+            <p className="text-lg font-bold text-yellow-500">
+              R$ {level1Total.toFixed(2)}
+            </p>
+          </div>
+
+          <div className="bg-violet-500/10 rounded-xl p-3 border border-border">
+            <p className="text-xs text-muted-foreground">Nível 2 (3%)</p>
+            <p className="text-lg font-bold text-violet-500">
+              R$ {level2Total.toFixed(2)}
+            </p>
+          </div>
+
+          <div className="col-span-2 bg-primary/10 rounded-xl p-3 border border-border">
+            <p className="text-xs text-muted-foreground">Nível 3 (2%)</p>
+            <p className="text-lg font-bold text-primary">
+              R$ {level3Total.toFixed(2)}
+            </p>
+          </div>
         </div>
+      </div>
+
+      {/* Commission History */}
+      <div>
+        <h2 className="text-lg font-semibold text-foreground mb-3">
+          Histórico de Comissões
+        </h2>
+
+        {commissions && commissions.length > 0 ? (
+          <div className="space-y-3">
+            {commissions.map((commission: any) => (
+              <div
+                key={commission.id}
+                className="bg-card rounded-xl p-4 border border-border"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                      <Award className="w-5 h-5 text-green-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {commission.source?.full_name || "Usuário"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(commission.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-green-500">
+                      +R$ {Number(commission.amount).toFixed(2)}
+                    </p>
+                    {getLevelBadge(commission.level)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-card rounded-xl p-6 border border-border text-center">
+            <Award className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground">
+              Nenhuma comissão ainda
+            </p>
+            <p className="text-sm text-primary mt-1">
+              Indique amigos e ganhe comissões!
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Referrals List */}
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-3">
-          Seus Indicados
+          Seus Indicados (Nível 1)
         </h2>
 
         {referrals && referrals.length > 0 ? (
@@ -161,10 +254,13 @@ const AffiliatesTab = () => {
                       {referral.full_name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Nível 1 • {new Date(referral.created_at).toLocaleDateString("pt-BR")}
+                      {new Date(referral.created_at).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
                 </div>
+                <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/10 text-yellow-500">
+                  Nível 1
+                </span>
               </div>
             ))}
           </div>
