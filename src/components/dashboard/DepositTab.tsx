@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowDownCircle, Copy, Clock, CheckCircle, XCircle } from "lucide-react";
+import { ArrowDownCircle, Copy, Clock, CheckCircle, XCircle, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -10,10 +10,10 @@ import { toast } from "sonner";
 const depositAmounts = [50, 100, 200, 500, 1000, 2000];
 
 const DepositTab = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPix, setShowPix] = useState(false);
+  const [pixData, setPixData] = useState<{ code: string; image?: string } | null>(null);
 
   const { data: deposits, refetch: refetchDeposits } = useQuery({
     queryKey: ["deposits", user?.id],
@@ -41,28 +41,50 @@ const DepositTab = () => {
 
     setLoading(true);
 
-    const { error } = await supabase.from("transactions").insert({
-      user_id: user.id,
-      type: "deposit",
-      amount: depositAmount,
-      status: "pending",
-      description: "Depósito via PIX",
-    });
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      
+      const response = await supabase.functions.invoke('create-pix-deposit', {
+        body: {
+          amount: depositAmount,
+          name: profile?.full_name || 'Cliente',
+          email: user.email,
+          phone: profile?.phone || '(11) 99999-9999',
+        },
+      });
 
-    if (error) {
-      toast.error("Erro ao criar depósito");
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const data = response.data;
+
+      if (data.error) {
+        toast.error(data.error);
+        setLoading(false);
+        return;
+      }
+
+      setPixData({
+        code: data.pix.code,
+        image: data.pix.image || data.pix.base64,
+      });
+      
+      await refetchDeposits();
+      toast.success("PIX gerado com sucesso!");
+    } catch (error: any) {
+      console.error('Deposit error:', error);
+      toast.error(error.message || "Erro ao criar depósito");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setShowPix(true);
-    await refetchDeposits();
-    setLoading(false);
   };
 
   const copyPix = () => {
-    navigator.clipboard.writeText("investfutura@pix.com.br");
-    toast.success("Chave PIX copiada!");
+    if (pixData?.code) {
+      navigator.clipboard.writeText(pixData.code);
+      toast.success("Código PIX copiado!");
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -89,7 +111,7 @@ const DepositTab = () => {
     }
   };
 
-  if (showPix) {
+  if (pixData) {
     return (
       <div className="space-y-6">
         <div className="text-center">
@@ -100,25 +122,37 @@ const DepositTab = () => {
         </div>
 
         <div className="bg-card rounded-xl p-6 border border-border text-center">
+          {pixData.image && (
+            <div className="mb-4">
+              <img 
+                src={pixData.image} 
+                alt="QR Code PIX" 
+                className="w-48 h-48 mx-auto rounded-lg"
+              />
+            </div>
+          )}
+
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-            <ArrowDownCircle className="w-8 h-8 text-primary" />
+            <QrCode className="w-8 h-8 text-primary" />
           </div>
 
-          <p className="text-sm text-muted-foreground mb-2">Chave PIX (E-mail)</p>
-          <p className="text-lg font-mono font-bold text-foreground mb-4 break-all">
-            investfutura@pix.com.br
-          </p>
+          <p className="text-sm text-muted-foreground mb-2">Código PIX Copia e Cola</p>
+          <div className="bg-muted/50 rounded-lg p-3 mb-4">
+            <p className="text-xs font-mono text-foreground break-all max-h-20 overflow-y-auto">
+              {pixData.code}
+            </p>
+          </div>
 
           <Button variant="outline" className="w-full mb-4" onClick={copyPix}>
             <Copy className="w-4 h-4 mr-2" />
-            Copiar Chave PIX
+            Copiar Código PIX
           </Button>
 
           <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-left">
             <p className="text-sm text-yellow-500 font-medium mb-1">⚠️ Importante</p>
             <p className="text-xs text-muted-foreground">
-              Após o pagamento, seu depósito será aprovado em até 5 minutos.
-              Use o mesmo e-mail cadastrado para identificação.
+              Após o pagamento, seu depósito será creditado automaticamente em sua conta.
+              O prazo pode ser de alguns segundos até 5 minutos.
             </p>
           </div>
         </div>
@@ -127,11 +161,12 @@ const DepositTab = () => {
           variant="gradient"
           className="w-full"
           onClick={() => {
-            setShowPix(false);
+            setPixData(null);
             setAmount("");
+            refetchDeposits();
           }}
         >
-          Voltar
+          Fazer Novo Depósito
         </Button>
       </div>
     );
@@ -186,7 +221,7 @@ const DepositTab = () => {
         onClick={handleDeposit}
         disabled={loading || !amount}
       >
-        {loading ? "Processando..." : "Gerar PIX"}
+        {loading ? "Gerando PIX..." : "Gerar PIX"}
       </Button>
 
       {/* History */}
