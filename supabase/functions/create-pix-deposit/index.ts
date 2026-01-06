@@ -138,13 +138,19 @@ Deno.serve(async (req) => {
 
     console.log('PoseidonPay response:', JSON.stringify(poseidonData))
 
+    // Convert base64 to data URL if needed
+    let pixImage = poseidonData.pix?.base64 || poseidonData.pix?.image || '';
+    if (pixImage && !pixImage.startsWith('data:')) {
+      pixImage = `data:image/png;base64,${pixImage}`;
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         transactionId: poseidonData.transactionId,
         pix: {
           code: poseidonData.pix?.code || poseidonData.pix?.qrCode,
-          image: poseidonData.pix?.image || poseidonData.pix?.base64,
+          image: pixImage,
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
