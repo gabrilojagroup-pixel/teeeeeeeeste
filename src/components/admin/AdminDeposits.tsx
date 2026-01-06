@@ -60,6 +60,19 @@ const AdminDeposits = () => {
           if (profileError) throw profileError;
         }
       }
+
+      // Create notification for user
+      const notificationData = {
+        user_id: userId,
+        title: status === "approved" ? "Depósito aprovado!" : "Depósito rejeitado",
+        message: status === "approved" 
+          ? `Seu depósito de R$ ${amount.toFixed(2)} foi aprovado e o saldo foi adicionado à sua conta.`
+          : `Seu depósito de R$ ${amount.toFixed(2)} foi rejeitado. Entre em contato com o suporte para mais informações.`,
+        type: status === "approved" ? "success" : "error",
+        is_read: false,
+      };
+
+      await supabase.from("notifications").insert(notificationData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-deposits"] });
