@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Check, X, RefreshCw } from "lucide-react";
+import { Check, X, RefreshCw, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 const AdminWithdrawals = () => {
@@ -44,52 +44,24 @@ const AdminWithdrawals = () => {
     },
   });
 
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status, userId, amount }: { id: string; status: string; userId: string; amount: number }) => {
-      const { error } = await supabase
-        .from("transactions")
-        .update({ status })
-        .eq("id", id);
+  const processWithdrawMutation = useMutation({
+    mutationFn: async ({ transactionId, action }: { transactionId: string; action: 'approve' | 'reject' }) => {
+      const { data, error } = await supabase.functions.invoke('admin-process-withdraw', {
+        body: { transactionId, action }
+      });
 
       if (error) throw error;
-
-      // Create notification for user
-      const notificationData = {
-        user_id: userId,
-        title: status === "approved" ? "Saque aprovado!" : "Saque rejeitado",
-        message: status === "approved" 
-          ? `Seu saque de R$ ${amount.toFixed(2)} foi aprovado e será processado automaticamente.`
-          : `Seu saque de R$ ${amount.toFixed(2)} foi rejeitado. O saldo foi devolvido à sua conta.`,
-        type: status === "approved" ? "success" : "error",
-        is_read: false,
-      };
-
-      await supabase.from("notifications").insert(notificationData);
-
-      // If rejected, return balance to user
-      if (status === "rejected") {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("balance")
-          .eq("user_id", userId)
-          .single();
-
-        if (profile) {
-          const newBalance = Number(profile.balance) + amount;
-          await supabase
-            .from("profiles")
-            .update({ balance: newBalance })
-            .eq("user_id", userId);
-        }
-      }
+      if (data.error) throw new Error(data.error);
+      
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["admin-withdrawals"] });
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
-      toast.success("Status atualizado com sucesso!");
+      toast.success(data.message || "Operação realizada com sucesso!");
     },
-    onError: () => {
-      toast.error("Erro ao atualizar status");
+    onError: (error: any) => {
+      toast.error(error.message || "Erro ao processar saque");
     },
   });
 
@@ -119,7 +91,7 @@ const AdminWithdrawals = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Saques</h1>
-          <p className="text-muted-foreground">Gerenciar solicitações de saque</p>
+          <p className="text-muted-foreground">Gerenciar e pagar saques via PIX</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()}>
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -164,46 +136,51 @@ const AdminWithdrawals = () => {
                       <p className="text-xs text-muted-foreground">Taxa: R$ {fee.toFixed(2)}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="max-w-[200px] truncate text-sm">
-                    {withdrawal.pix_key || "-"}
+                  <TableCell className="max-w-[200px]">
+                    <p className="truncate text-sm font-mono">{withdrawal.pix_key || "-"}</p>
                   </TableCell>
                   <TableCell>{getStatusBadge(withdrawal.status)}</TableCell>
                   <TableCell className="text-sm">
                     {format(new Date(withdrawal.created_at), "dd/MM/yyyy HH:mm")}
                   </TableCell>
-                <TableCell>
-                  {withdrawal.status === "pending" && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-green-500 hover:text-green-600 hover:bg-green-500/10"
-                        onClick={() => updateStatusMutation.mutate({ 
-                          id: withdrawal.id, 
-                          status: "approved",
-                          userId: withdrawal.user_id,
-                          amount: Number(withdrawal.amount)
-                        })}
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                        onClick={() => updateStatusMutation.mutate({ 
-                          id: withdrawal.id, 
-                          status: "rejected",
-                          userId: withdrawal.user_id,
-                          amount: Number(withdrawal.amount)
-                        })}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </TableCell>
-              </TableRow>
+                  <TableCell>
+                    {withdrawal.status === "pending" && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          disabled={processWithdrawMutation.isPending}
+                          onClick={() => processWithdrawMutation.mutate({ 
+                            transactionId: withdrawal.id, 
+                            action: "approve"
+                          })}
+                        >
+                          {processWithdrawMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4 mr-1" />
+                              Pagar
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={processWithdrawMutation.isPending}
+                          onClick={() => processWithdrawMutation.mutate({ 
+                            transactionId: withdrawal.id, 
+                            action: "reject"
+                          })}
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Rejeitar
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
               );
             })}
             {withdrawals?.length === 0 && (
