@@ -2,10 +2,11 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowDownCircle, Copy, Clock, CheckCircle, XCircle, QrCode } from "lucide-react";
+import { ArrowDownCircle, Copy, Clock, CheckCircle, XCircle, QrCode, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 
 const depositAmounts = [30, 50, 100, 200, 500, 1000];
 
@@ -111,9 +112,115 @@ const DepositTab = () => {
     }
   };
 
+  // Loading overlay component
+  if (loading) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-6"
+      >
+        <div className="text-center">
+          <h1 className="text-xl font-bold text-foreground">Gerando PIX</h1>
+          <p className="text-muted-foreground text-sm">
+            Aguarde enquanto preparamos seu pagamento...
+          </p>
+        </div>
+
+        <div className="bg-card rounded-xl p-8 border border-border">
+          <div className="flex flex-col items-center justify-center space-y-6">
+            {/* Animated PIX icon */}
+            <motion.div
+              animate={{ 
+                scale: [1, 1.1, 1],
+                rotate: [0, 5, -5, 0]
+              }}
+              transition={{ 
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+              className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center border-2 border-primary/30"
+            >
+              <QrCode className="w-12 h-12 text-primary" />
+            </motion.div>
+
+            {/* Loading spinner */}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            >
+              <Loader2 className="w-8 h-8 text-primary" />
+            </motion.div>
+
+            {/* Progress steps */}
+            <div className="space-y-3 w-full max-w-xs">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className="flex items-center gap-3"
+              >
+                <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-primary-foreground" />
+                </div>
+                <span className="text-sm text-foreground">Validando dados...</span>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.6 }}
+                className="flex items-center gap-3"
+              >
+                <motion.div 
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 0.8, repeat: Infinity }}
+                  className="w-6 h-6 rounded-full bg-primary/50 flex items-center justify-center"
+                >
+                  <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" />
+                </motion.div>
+                <span className="text-sm text-muted-foreground">Gerando QR Code PIX...</span>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 0.5, x: 0 }}
+                transition={{ delay: 1 }}
+                className="flex items-center gap-3"
+              >
+                <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <span className="text-sm text-muted-foreground">Preparando pagamento...</span>
+              </motion.div>
+            </div>
+
+            {/* Animated amount */}
+            <motion.div
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="text-center mt-4"
+            >
+              <p className="text-sm text-muted-foreground">Valor do depósito</p>
+              <p className="text-2xl font-bold text-primary">
+                R$ {parseFloat(amount || "0").toFixed(2)}
+              </p>
+            </motion.div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
   if (pixData) {
     return (
-      <div className="space-y-6">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+        className="space-y-6"
+      >
         <div className="text-center">
           <h1 className="text-xl font-bold text-foreground">Depósito PIX</h1>
           <p className="text-muted-foreground text-sm">
@@ -121,20 +228,35 @@ const DepositTab = () => {
           </p>
         </div>
 
-        <div className="bg-card rounded-xl p-6 border border-border text-center">
+        <motion.div 
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="bg-card rounded-xl p-6 border border-border text-center"
+        >
           {pixData.image && (
-            <div className="mb-4">
+            <motion.div 
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, type: "spring" }}
+              className="mb-4"
+            >
               <img 
                 src={pixData.image} 
                 alt="QR Code PIX" 
-                className="w-48 h-48 mx-auto rounded-lg"
+                className="w-48 h-48 mx-auto rounded-lg shadow-lg"
               />
-            </div>
+            </motion.div>
           )}
 
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.3, type: "spring" }}
+            className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center"
+          >
             <QrCode className="w-8 h-8 text-primary" />
-          </div>
+          </motion.div>
 
           <p className="text-sm text-muted-foreground mb-2">Código PIX Copia e Cola</p>
           <div className="bg-muted/50 rounded-lg p-3 mb-4">
@@ -155,7 +277,7 @@ const DepositTab = () => {
               O prazo pode ser de alguns segundos até 5 minutos.
             </p>
           </div>
-        </div>
+        </motion.div>
 
         <Button
           variant="gradient"
@@ -168,7 +290,7 @@ const DepositTab = () => {
         >
           Fazer Novo Depósito
         </Button>
-      </div>
+      </motion.div>
     );
   }
 
