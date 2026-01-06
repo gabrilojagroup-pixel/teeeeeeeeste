@@ -34,13 +34,43 @@ const AdminWithdrawals = () => {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status, userId, amount }: { id: string; status: string; userId: string; amount: number }) => {
       const { error } = await supabase
         .from("transactions")
         .update({ status })
         .eq("id", id);
 
       if (error) throw error;
+
+      // Create notification for user
+      const notificationData = {
+        user_id: userId,
+        title: status === "approved" ? "Saque aprovado!" : "Saque rejeitado",
+        message: status === "approved" 
+          ? `Seu saque de R$ ${amount.toFixed(2)} foi aprovado e será processado em breve.`
+          : `Seu saque de R$ ${amount.toFixed(2)} foi rejeitado. O saldo foi devolvido à sua conta.`,
+        type: status === "approved" ? "success" : "error",
+        is_read: false,
+      };
+
+      await supabase.from("notifications").insert(notificationData);
+
+      // If rejected, return balance to user
+      if (status === "rejected") {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("balance")
+          .eq("user_id", userId)
+          .single();
+
+        if (profile) {
+          const newBalance = Number(profile.balance) + amount;
+          await supabase
+            .from("profiles")
+            .update({ balance: newBalance })
+            .eq("user_id", userId);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-withdrawals"] });
@@ -118,7 +148,12 @@ const AdminWithdrawals = () => {
                         size="sm"
                         variant="ghost"
                         className="text-green-500"
-                        onClick={() => updateStatusMutation.mutate({ id: withdrawal.id, status: "approved" })}
+                        onClick={() => updateStatusMutation.mutate({ 
+                          id: withdrawal.id, 
+                          status: "approved",
+                          userId: withdrawal.user_id,
+                          amount: Number(withdrawal.amount)
+                        })}
                       >
                         <Check className="w-4 h-4" />
                       </Button>
@@ -126,7 +161,12 @@ const AdminWithdrawals = () => {
                         size="sm"
                         variant="ghost"
                         className="text-red-500"
-                        onClick={() => updateStatusMutation.mutate({ id: withdrawal.id, status: "rejected" })}
+                        onClick={() => updateStatusMutation.mutate({ 
+                          id: withdrawal.id, 
+                          status: "rejected",
+                          userId: withdrawal.user_id,
+                          amount: Number(withdrawal.amount)
+                        })}
                       >
                         <X className="w-4 h-4" />
                       </Button>
