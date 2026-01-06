@@ -11,6 +11,7 @@ const navItems: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: "home", label: "Início", icon: Home },
   { id: "plans", label: "Planos", icon: TrendingUp },
   { id: "affiliates", label: "Afiliados", icon: Users },
+  { id: "checkin", label: "Check-in", icon: Gift },
   { id: "history", label: "Histórico", icon: History },
   { id: "deposit", label: "Depositar", icon: ArrowDownCircle },
   { id: "withdraw", label: "Sacar", icon: ArrowUpCircle },
