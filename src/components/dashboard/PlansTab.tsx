@@ -13,6 +13,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+import planBasic from "@/assets/plan-basic.png";
+import planStarter from "@/assets/plan-starter.png";
+import planSilver from "@/assets/plan-silver.png";
+import planGold from "@/assets/plan-gold.png";
+import planPlatinum from "@/assets/plan-platinum.png";
+
+const planImages = [planBasic, planStarter, planSilver, planGold, planPlatinum];
+
 const PlansTab = () => {
   const { user, profile, refreshProfile } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
@@ -115,8 +123,17 @@ const PlansTab = () => {
         {plans?.map((plan: any, index: number) => (
           <div
             key={plan.id}
-            className="bg-card rounded-xl p-5 border border-border hover:border-primary/50 transition-colors"
+            className="bg-card rounded-xl p-5 border border-border hover:border-primary/50 transition-colors overflow-hidden"
           >
+            {/* Plan Image */}
+            <div className="w-full h-32 rounded-lg overflow-hidden mb-4 bg-secondary/50">
+              <img 
+                src={planImages[index] || planBasic} 
+                alt={plan.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
