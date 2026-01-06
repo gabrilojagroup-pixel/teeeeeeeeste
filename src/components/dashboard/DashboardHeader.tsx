@@ -1,12 +1,8 @@
 import { useAuth } from "@/hooks/useAuth";
-import { LogOut, Bell } from "lucide-react";
+import { LogOut } from "lucide-react";
 import Logo from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import NotificationsPopover from "./NotificationsPopover";
 
 const DashboardHeader = () => {
   const { profile, signOut } = useAuth();
@@ -26,27 +22,7 @@ const DashboardHeader = () => {
             </p>
           </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground relative"
-              >
-                <Bell className="w-5 h-5" />
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-primary rounded-full" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 p-0">
-              <div className="p-3 border-b border-border">
-                <h4 className="font-semibold text-sm">Notificações</h4>
-              </div>
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>Nenhuma notificação</p>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <NotificationsPopover />
           
           <Button
             variant="ghost"

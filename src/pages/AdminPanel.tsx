@@ -60,9 +60,9 @@ const AdminPanel = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
       <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-4 lg:p-6 overflow-auto pt-20 lg:pt-6">
         {renderContent()}
       </main>
     </div>
