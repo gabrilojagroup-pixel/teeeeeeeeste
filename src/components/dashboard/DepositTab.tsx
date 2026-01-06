@@ -11,6 +11,15 @@ import { QRCodeSVG } from "qrcode.react";
 
 const depositAmounts = [30, 50, 100, 200, 500, 1000];
 const POLLING_INTERVAL = 3000; // 3 seconds
+const PIX_EXPIRATION_MINUTES = 15;
+
+interface StoredPixData {
+  code: string;
+  image?: string;
+  amount: string;
+  expiresAt: number;
+  transactionId?: string;
+}
 
 // Função para validar CPF
 const validateCPF = (cpf: string): boolean => {
@@ -65,6 +74,32 @@ const DepositTab = () => {
   const [pixData, setPixData] = useState<{ code: string; image?: string } | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [isPolling, setIsPolling] = useState(false);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>("");
+
+  // Load stored PIX data from localStorage on mount
+  useEffect(() => {
+    if (user) {
+      const storedKey = `pix_deposit_${user.id}`;
+      const stored = localStorage.getItem(storedKey);
+      if (stored) {
+        try {
+          const data: StoredPixData = JSON.parse(stored);
+          if (data.expiresAt > Date.now()) {
+            setPixData({ code: data.code, image: data.image });
+            setAmount(data.amount);
+            setExpiresAt(data.expiresAt);
+            setPaymentStatus('pending');
+          } else {
+            // Expired, remove from storage
+            localStorage.removeItem(storedKey);
+          }
+        } catch (e) {
+          localStorage.removeItem(storedKey);
+        }
+      }
+    }
+  }, [user]);
 
   // Load data from profile
   useEffect(() => {
@@ -74,6 +109,32 @@ const DepositTab = () => {
       if (profile.phone && !phone) setPhone(formatPhone(profile.phone));
     }
   }, [profile]);
+
+  // Timer countdown
+  useEffect(() => {
+    if (!expiresAt || paymentStatus !== 'pending') return;
+    
+    const updateTimer = () => {
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) {
+        setTimeRemaining("Expirado");
+        setPixData(null);
+        setExpiresAt(null);
+        if (user) {
+          localStorage.removeItem(`pix_deposit_${user.id}`);
+        }
+        toast.error("PIX expirado. Gere um novo código.");
+        return;
+      }
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = Math.floor((remaining % 60000) / 1000);
+      setTimeRemaining(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt, paymentStatus, user]);
 
   const { data: deposits, refetch: refetchDeposits } = useQuery({
     queryKey: ["deposits", user?.id],
@@ -200,6 +261,7 @@ const DepositTab = () => {
       }
 
       const data = response.data;
+      console.log('PIX response:', data);
 
       if (data.error) {
         toast.error(data.error);
@@ -207,11 +269,28 @@ const DepositTab = () => {
         return;
       }
 
+      const pixCode = data.pix?.code || data.pix?.qrCode || '';
+      const pixImage = data.pix?.image || data.pix?.base64;
+      const expiration = Date.now() + (PIX_EXPIRATION_MINUTES * 60 * 1000);
+
       setPixData({
-        code: data.pix.code,
-        image: data.pix.image || data.pix.base64,
+        code: pixCode,
+        image: pixImage,
       });
+      setExpiresAt(expiration);
       setPaymentStatus('pending');
+
+      // Store in localStorage for persistence
+      if (user) {
+        const storedData: StoredPixData = {
+          code: pixCode,
+          image: pixImage,
+          amount: amount,
+          expiresAt: expiration,
+          transactionId: data.transactionId,
+        };
+        localStorage.setItem(`pix_deposit_${user.id}`, JSON.stringify(storedData));
+      }
       
       await refetchDeposits();
       toast.success("PIX gerado com sucesso!");
@@ -233,7 +312,11 @@ const DepositTab = () => {
   const handleNewDeposit = () => {
     setPixData(null);
     setAmount("");
+    setExpiresAt(null);
     setPaymentStatus('pending');
+    if (user) {
+      localStorage.removeItem(`pix_deposit_${user.id}`);
+    }
     refetchDeposits();
   };
 
@@ -364,14 +447,33 @@ const DepositTab = () => {
               exit={{ y: -20, opacity: 0 }}
               className="bg-card rounded-xl p-6 border border-border text-center"
             >
+              {/* Timer */}
+              {expiresAt && timeRemaining && (
+                <div className="mb-4 flex items-center justify-center gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span className={`font-mono font-bold ${timeRemaining === 'Expirado' ? 'text-red-500' : 'text-foreground'}`}>
+                    {timeRemaining}
+                  </span>
+                </div>
+              )}
+
               <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, type: "spring" }} className="mb-4 flex justify-center">
                 {pixData.image ? (
                   <img src={pixData.image} alt="QR Code PIX" className="w-48 h-48 rounded-lg shadow-lg" />
-                ) : pixData.code ? (
+                ) : pixData.code && pixData.code.length > 0 ? (
                   <div className="bg-white p-4 rounded-lg shadow-lg">
-                    <QRCodeSVG value={pixData.code} size={192} level="M" />
+                    <QRCodeSVG 
+                      value={pixData.code} 
+                      size={192} 
+                      level="L"
+                      includeMargin={true}
+                    />
                   </div>
-                ) : null}
+                ) : (
+                  <div className="w-48 h-48 bg-muted rounded-lg flex items-center justify-center">
+                    <QrCode className="w-12 h-12 text-muted-foreground" />
+                  </div>
+                )}
               </motion.div>
 
               <p className="text-sm text-muted-foreground mb-2">Código PIX Copia e Cola</p>
