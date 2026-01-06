@@ -63,14 +63,29 @@ Deno.serve(async (req) => {
       },
     })
 
-    const balanceData = await poseidonResponse.json()
-    console.log('PoseidonPay balance response:', JSON.stringify(balanceData))
+    const responseText = await poseidonResponse.text()
+    console.log('PoseidonPay balance response:', responseText, 'Status:', poseidonResponse.status)
 
     if (!poseidonResponse.ok) {
       return new Response(
         JSON.stringify({ 
           error: 'Erro ao buscar saldo do gateway',
-          details: balanceData
+          details: responseText,
+          status: poseidonResponse.status
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Try to parse as JSON
+    let balanceData
+    try {
+      balanceData = JSON.parse(responseText)
+    } catch {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Resposta inválida do gateway',
+          details: responseText
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
