@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.poseidonpay-webhook]
 verify_jwt = false
+
+[functions.admin-process-withdraw]
+verify_jwt = false
