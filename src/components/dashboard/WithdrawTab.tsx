@@ -59,6 +59,7 @@ const WithdrawTab = () => {
   const [pixKey, setPixKey] = useState("");
   const [cpfError, setCpfError] = useState("");
   const [loading, setLoading] = useState(false);
+  const FEE_PERCENTAGE = 0.10; // 10% fee
 
   // Load data from profile
   useEffect(() => {
@@ -334,6 +335,22 @@ const WithdrawTab = () => {
             onChange={(e) => setAmount(e.target.value)}
             className="h-12"
           />
+          {amount && parseFloat(amount) > 0 && (
+            <div className="mt-2 p-3 bg-muted/50 rounded-lg space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Valor solicitado:</span>
+                <span className="text-foreground">R$ {parseFloat(amount).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Taxa (10%):</span>
+                <span className="text-red-500">- R$ {(parseFloat(amount) * FEE_PERCENTAGE).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-bold border-t border-border pt-1">
+                <span className="text-foreground">Você receberá:</span>
+                <span className="text-green-500">R$ {(parseFloat(amount) * (1 - FEE_PERCENTAGE)).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
@@ -358,7 +375,7 @@ const WithdrawTab = () => {
           ⚡ <strong>PIX Automático:</strong> Saques são processados automaticamente via API.
         </p>
         <p className="text-sm text-muted-foreground mt-2">
-          💰 <strong>Taxa:</strong> Sem taxas para saques acima de R$ 50,00.
+          💰 <strong>Taxa:</strong> 10% sobre o valor do saque.
         </p>
       </div>
 
