@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Home, TrendingUp, Users, Gift, ArrowDownCircle, ArrowUpCircle, History, MoreHorizontal, X } from "lucide-react";
+import { Home, TrendingUp, Users, Gift, ArrowDownCircle, ArrowUpCircle, History, MoreHorizontal, X, Bell } from "lucide-react";
 import { TabType } from "@/pages/Dashboard";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,7 @@ const moreItems: { id: TabType; label: string; icon: React.ElementType }[] = [
   { id: "withdraw", label: "Sacar", icon: ArrowUpCircle },
   { id: "history", label: "Histórico", icon: History },
   { id: "checkin", label: "Check-in", icon: Gift },
+  { id: "notifications", label: "Notificações", icon: Bell },
 ];
 
 const DashboardNav = ({ activeTab, setActiveTab }: DashboardNavProps) => {
@@ -53,7 +54,7 @@ const DashboardNav = ({ activeTab, setActiveTab }: DashboardNavProps) => {
               <X className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {moreItems.map((item) => (
               <button
                 key={item.id}
