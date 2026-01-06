@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, TrendingUp, ArrowUpCircle, ArrowDownCircle, DollarSign, Package } from "lucide-react";
+import { Users, TrendingUp, ArrowUpCircle, ArrowDownCircle, DollarSign, Package, Wallet, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const AdminDashboard = () => {
+  // Stats query
   const { data: stats } = useQuery({
     queryKey: ["admin-stats"],
     queryFn: async () => {
@@ -54,6 +56,25 @@ const AdminDashboard = () => {
         totalWithdrawals,
       };
     },
+  });
+
+  // Gateway balance query
+  const { data: gatewayBalance, isLoading: isLoadingBalance, refetch: refetchBalance } = useQuery({
+    queryKey: ["gateway-balance"],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Não autenticado");
+
+      const response = await supabase.functions.invoke("get-gateway-balance");
+      
+      if (response.error) {
+        console.error("Gateway balance error:", response.error);
+        return { balance: null, error: response.error.message };
+      }
+      
+      return response.data;
+    },
+    refetchInterval: 60000, // Refresh every minute
   });
 
   const statCards = [
@@ -127,6 +148,37 @@ const AdminDashboard = () => {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground">Visão geral do sistema</p>
+      </div>
+
+      {/* Gateway Balance Card */}
+      <div className="bg-gradient-to-r from-primary/20 to-primary/5 rounded-xl p-6 border border-primary/30">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-primary/20 rounded-xl flex items-center justify-center">
+              <Wallet className="w-7 h-7 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Saldo Gateway PoseidonPay</p>
+              {isLoadingBalance ? (
+                <p className="text-2xl font-bold text-primary animate-pulse">Carregando...</p>
+              ) : gatewayBalance?.error ? (
+                <p className="text-lg font-semibold text-destructive">Erro ao carregar</p>
+              ) : (
+                <p className="text-3xl font-bold text-primary">
+                  R$ {(gatewayBalance?.balance || 0).toFixed(2)}
+                </p>
+              )}
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => refetchBalance()}
+            disabled={isLoadingBalance}
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoadingBalance ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
