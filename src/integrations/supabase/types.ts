@@ -167,6 +167,7 @@ export type Database = {
         Row: {
           accumulated_balance: number | null
           balance: number | null
+          cpf: string | null
           created_at: string | null
           full_name: string
           id: string
@@ -180,6 +181,7 @@ export type Database = {
         Insert: {
           accumulated_balance?: number | null
           balance?: number | null
+          cpf?: string | null
           created_at?: string | null
           full_name: string
           id?: string
@@ -193,6 +195,7 @@ export type Database = {
         Update: {
           accumulated_balance?: number | null
           balance?: number | null
+          cpf?: string | null
           created_at?: string | null
           full_name?: string
           id?: string

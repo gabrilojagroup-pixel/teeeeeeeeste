@@ -54,6 +54,21 @@ const WithdrawTab = () => {
   const [cpf, setCpf] = useState("");
   const [cpfError, setCpfError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cpfLoaded, setCpfLoaded] = useState(false);
+
+  // Load CPF from profile on mount
+  useState(() => {
+    if (profile?.cpf && !cpfLoaded) {
+      setCpf(formatCPF(profile.cpf));
+      setCpfLoaded(true);
+    }
+  });
+
+  // Update CPF when profile loads
+  if (profile?.cpf && !cpfLoaded) {
+    setCpf(formatCPF(profile.cpf));
+    setCpfLoaded(true);
+  }
 
   const { data: withdrawals, refetch: refetchWithdrawals } = useQuery({
     queryKey: ["withdrawals", user?.id],
@@ -119,6 +134,14 @@ const WithdrawTab = () => {
     setLoading(true);
 
     try {
+      // Save CPF to profile if not already saved
+      if (!profile.cpf || profile.cpf !== cleanCPF) {
+        await supabase
+          .from('profiles')
+          .update({ cpf: cleanCPF })
+          .eq('id', profile.id);
+      }
+
       const response = await supabase.functions.invoke('create-pix-withdraw', {
         body: {
           amount: withdrawAmount,

@@ -7,6 +7,7 @@ interface Profile {
   user_id: string;
   full_name: string;
   phone: string | null;
+  cpf: string | null;
   referral_code: string;
   referred_by: string | null;
   balance: number;
