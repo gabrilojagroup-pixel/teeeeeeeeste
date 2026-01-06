@@ -105,8 +105,8 @@ const WithdrawTab = () => {
     if (!user || !profile) return;
 
     const withdrawAmount = parseFloat(amount);
-    if (isNaN(withdrawAmount) || withdrawAmount < 20) {
-      toast.error("Valor mínimo de saque: R$ 20,00");
+    if (isNaN(withdrawAmount) || withdrawAmount < 30) {
+      toast.error("Valor mínimo de saque: R$ 30,00");
       return;
     }
 
@@ -231,7 +231,7 @@ const WithdrawTab = () => {
           </label>
           <Input
             type="number"
-            placeholder="Mínimo R$ 20,00"
+            placeholder="Mínimo R$ 30,00"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="h-12"

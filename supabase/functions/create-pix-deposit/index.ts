@@ -39,9 +39,9 @@ Deno.serve(async (req) => {
     const userId = claims.claims.sub
     const { amount, name, email, phone, document } = await req.json()
 
-    if (!amount || amount < 50) {
+    if (!amount || amount < 30) {
       return new Response(
-        JSON.stringify({ error: 'Valor mínimo de depósito: R$ 50,00' }),
+        JSON.stringify({ error: 'Valor mínimo de depósito: R$ 30,00' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

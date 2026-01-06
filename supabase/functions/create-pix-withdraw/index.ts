@@ -52,9 +52,9 @@ Deno.serve(async (req) => {
     const userId = claims.claims.sub
     const { amount, pixKey, name, document } = await req.json()
 
-    if (!amount || amount < 20) {
+    if (!amount || amount < 30) {
       return new Response(
-        JSON.stringify({ error: 'Valor mínimo de saque: R$ 20,00' }),
+        JSON.stringify({ error: 'Valor mínimo de saque: R$ 30,00' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

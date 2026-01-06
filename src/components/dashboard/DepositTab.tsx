@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-const depositAmounts = [50, 100, 200, 500, 1000, 2000];
+const depositAmounts = [30, 50, 100, 200, 500, 1000];
 
 const DepositTab = () => {
   const { user, profile } = useAuth();
@@ -34,8 +34,8 @@ const DepositTab = () => {
     if (!user) return;
 
     const depositAmount = parseFloat(amount);
-    if (isNaN(depositAmount) || depositAmount < 50) {
-      toast.error("Valor mínimo de depósito: R$ 50,00");
+    if (isNaN(depositAmount) || depositAmount < 30) {
+      toast.error("Valor mínimo de depósito: R$ 30,00");
       return;
     }
 
@@ -208,7 +208,7 @@ const DepositTab = () => {
         </label>
         <Input
           type="number"
-          placeholder="Mínimo R$ 50,00"
+          placeholder="Mínimo R$ 30,00"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           className="h-12 text-lg"
