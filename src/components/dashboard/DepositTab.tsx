@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowDownCircle, Copy, Clock, CheckCircle, XCircle, QrCode, Loader2, User, Phone, CreditCard } from "lucide-react";
+import { ArrowDownCircle, Copy, Clock, CheckCircle, XCircle, Loader2, User, CreditCard, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
 
 const depositAmounts = [30, 50, 100, 200, 500, 1000];
 
@@ -278,14 +279,14 @@ const DepositTab = () => {
         </div>
 
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-card rounded-xl p-6 border border-border text-center">
-          {pixData.image && (
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, type: "spring" }} className="mb-4">
-              <img src={pixData.image} alt="QR Code PIX" className="w-48 h-48 mx-auto rounded-lg shadow-lg" />
-            </motion.div>
-          )}
-
-          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3, type: "spring" }} className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-            <QrCode className="w-8 h-8 text-primary" />
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, type: "spring" }} className="mb-4 flex justify-center">
+            {pixData.image ? (
+              <img src={pixData.image} alt="QR Code PIX" className="w-48 h-48 rounded-lg shadow-lg" />
+            ) : pixData.code ? (
+              <div className="bg-white p-4 rounded-lg shadow-lg">
+                <QRCodeSVG value={pixData.code} size={192} level="M" />
+              </div>
+            ) : null}
           </motion.div>
 
           <p className="text-sm text-muted-foreground mb-2">Código PIX Copia e Cola</p>

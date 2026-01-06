@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       type: 'deposit',
       amount,
       status: 'pending',
-      description: `PIX Deposit - ${poseidonData.transactionId}`,
+      description: `PIX:${identifier}:${poseidonData.transactionId}`,
     })
 
     if (txError) {
@@ -136,11 +136,16 @@ Deno.serve(async (req) => {
       )
     }
 
+    console.log('PoseidonPay response:', JSON.stringify(poseidonData))
+
     return new Response(
       JSON.stringify({
         success: true,
         transactionId: poseidonData.transactionId,
-        pix: poseidonData.pix,
+        pix: {
+          code: poseidonData.pix?.code || poseidonData.pix?.qrCode,
+          image: poseidonData.pix?.image || poseidonData.pix?.base64,
+        },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
