@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,10 +6,11 @@ import { ArrowDownCircle, Copy, Clock, CheckCircle, XCircle, Loader2, User, Cred
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 
 const depositAmounts = [30, 50, 100, 200, 500, 1000];
+const POLLING_INTERVAL = 3000; // 3 seconds
 
 // Função para validar CPF
 const validateCPF = (cpf: string): boolean => {
@@ -62,6 +63,8 @@ const DepositTab = () => {
   const [cpfError, setCpfError] = useState("");
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState<{ code: string; image?: string } | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [isPolling, setIsPolling] = useState(false);
 
   // Load data from profile
   useEffect(() => {
@@ -86,6 +89,44 @@ const DepositTab = () => {
     },
     enabled: !!user,
   });
+
+  // Polling for payment status
+  const checkPaymentStatus = useCallback(async () => {
+    if (!user || !pixData) return;
+    
+    const { data } = await supabase
+      .from("transactions")
+      .select("status")
+      .eq("user_id", user.id)
+      .eq("type", "deposit")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    
+    const latestDeposit = data?.[0];
+    
+    if (latestDeposit?.status === 'approved') {
+      setPaymentStatus('approved');
+      setIsPolling(false);
+      await refetchDeposits();
+      await refreshProfile();
+      toast.success("🎉 Pagamento confirmado! Saldo creditado.");
+    } else if (latestDeposit?.status === 'rejected') {
+      setPaymentStatus('rejected');
+      setIsPolling(false);
+      await refetchDeposits();
+      toast.error("Pagamento rejeitado.");
+    }
+  }, [user, pixData, refetchDeposits, refreshProfile]);
+
+  // Start polling when PIX is generated
+  useEffect(() => {
+    if (pixData && paymentStatus === 'pending') {
+      setIsPolling(true);
+      const interval = setInterval(checkPaymentStatus, POLLING_INTERVAL);
+      return () => clearInterval(interval);
+    }
+  }, [pixData, paymentStatus, checkPaymentStatus]);
 
   const handleCpfChange = (value: string) => {
     const formatted = formatCPF(value);
@@ -170,6 +211,7 @@ const DepositTab = () => {
         code: data.pix.code,
         image: data.pix.image || data.pix.base64,
       });
+      setPaymentStatus('pending');
       
       await refetchDeposits();
       toast.success("PIX gerado com sucesso!");
@@ -186,6 +228,13 @@ const DepositTab = () => {
       navigator.clipboard.writeText(pixData.code);
       toast.success("Código PIX copiado!");
     }
+  };
+
+  const handleNewDeposit = () => {
+    setPixData(null);
+    setAmount("");
+    setPaymentStatus('pending');
+    refetchDeposits();
   };
 
   const getStatusIcon = (status: string) => {
@@ -274,41 +323,93 @@ const DepositTab = () => {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }} className="space-y-6">
         <div className="text-center">
-          <h1 className="text-xl font-bold text-foreground">Depósito PIX</h1>
-          <p className="text-muted-foreground text-sm">Transfira R$ {parseFloat(amount).toFixed(2)} via PIX</p>
+          <h1 className="text-xl font-bold text-foreground">
+            {paymentStatus === 'approved' ? '✅ Pagamento Confirmado!' : 'Depósito PIX'}
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            {paymentStatus === 'approved' 
+              ? `R$ ${parseFloat(amount).toFixed(2)} creditados em sua conta`
+              : `Transfira R$ ${parseFloat(amount).toFixed(2)} via PIX`
+            }
+          </p>
         </div>
 
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-card rounded-xl p-6 border border-border text-center">
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, type: "spring" }} className="mb-4 flex justify-center">
-            {pixData.image ? (
-              <img src={pixData.image} alt="QR Code PIX" className="w-48 h-48 rounded-lg shadow-lg" />
-            ) : pixData.code ? (
-              <div className="bg-white p-4 rounded-lg shadow-lg">
-                <QRCodeSVG value={pixData.code} size={192} level="M" />
+        <AnimatePresence mode="wait">
+          {paymentStatus === 'approved' ? (
+            <motion.div
+              key="success"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-green-500/10 border border-green-500/30 rounded-xl p-8 text-center"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", damping: 10, stiffness: 100 }}
+                className="w-20 h-20 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center"
+              >
+                <CheckCircle className="w-10 h-10 text-green-500" />
+              </motion.div>
+              <h2 className="text-xl font-bold text-green-500 mb-2">Depósito Aprovado!</h2>
+              <p className="text-muted-foreground">
+                Seu saldo foi atualizado automaticamente.
+              </p>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="pending"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -20, opacity: 0 }}
+              className="bg-card rounded-xl p-6 border border-border text-center"
+            >
+              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, type: "spring" }} className="mb-4 flex justify-center">
+                {pixData.image ? (
+                  <img src={pixData.image} alt="QR Code PIX" className="w-48 h-48 rounded-lg shadow-lg" />
+                ) : pixData.code ? (
+                  <div className="bg-white p-4 rounded-lg shadow-lg">
+                    <QRCodeSVG value={pixData.code} size={192} level="M" />
+                  </div>
+                ) : null}
+              </motion.div>
+
+              <p className="text-sm text-muted-foreground mb-2">Código PIX Copia e Cola</p>
+              <div className="bg-muted/50 rounded-lg p-3 mb-4">
+                <p className="text-xs font-mono text-foreground break-all max-h-20 overflow-y-auto">{pixData.code}</p>
               </div>
-            ) : null}
-          </motion.div>
 
-          <p className="text-sm text-muted-foreground mb-2">Código PIX Copia e Cola</p>
-          <div className="bg-muted/50 rounded-lg p-3 mb-4">
-            <p className="text-xs font-mono text-foreground break-all max-h-20 overflow-y-auto">{pixData.code}</p>
-          </div>
+              <Button variant="outline" className="w-full mb-4" onClick={copyPix}>
+                <Copy className="w-4 h-4 mr-2" />
+                Copiar Código PIX
+              </Button>
 
-          <Button variant="outline" className="w-full mb-4" onClick={copyPix}>
-            <Copy className="w-4 h-4 mr-2" />
-            Copiar Código PIX
-          </Button>
+              <motion.div 
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="bg-primary/10 border border-primary/20 rounded-lg p-4 mb-4"
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-sm text-primary font-medium">Aguardando pagamento...</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  O status será atualizado automaticamente
+                </p>
+              </motion.div>
 
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-left">
-            <p className="text-sm text-yellow-500 font-medium mb-1">⚠️ Importante</p>
-            <p className="text-xs text-muted-foreground">
-              Após o pagamento, seu depósito será creditado automaticamente em sua conta. O prazo pode ser de alguns segundos até 5 minutos.
-            </p>
-          </div>
-        </motion.div>
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-left">
+                <p className="text-sm text-yellow-500 font-medium mb-1">⚠️ Importante</p>
+                <p className="text-xs text-muted-foreground">
+                  Após o pagamento, seu depósito será creditado automaticamente.
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <Button variant="gradient" className="w-full" onClick={() => { setPixData(null); setAmount(""); refetchDeposits(); }}>
-          Fazer Novo Depósito
+        <Button variant="gradient" className="w-full" onClick={handleNewDeposit}>
+          {paymentStatus === 'approved' ? 'Fazer Outro Depósito' : 'Cancelar e Voltar'}
         </Button>
       </motion.div>
     );
