@@ -10,26 +10,37 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Check, X } from "lucide-react";
+import { Check, X, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 
 const AdminWithdrawals = () => {
   const queryClient = useQueryClient();
 
-  const { data: withdrawals, isLoading } = useQuery({
+  const { data: withdrawals, isLoading, refetch } = useQuery({
     queryKey: ["admin-withdrawals"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // First get withdrawals
+      const { data: transactions, error } = await supabase
         .from("transactions")
-        .select(`
-          *,
-          profiles!transactions_user_id_fkey (full_name, phone, cpf)
-        `)
+        .select("*")
         .eq("type", "withdrawal")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+
+      // Then get profiles for each transaction
+      const userIds = [...new Set(transactions?.map(t => t.user_id) || [])];
+      
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, phone, cpf")
+        .in("user_id", userIds);
+
+      // Merge data
+      return transactions?.map(t => ({
+        ...t,
+        profile: profiles?.find(p => p.user_id === t.user_id)
+      })) || [];
     },
   });
 
@@ -47,7 +58,7 @@ const AdminWithdrawals = () => {
         user_id: userId,
         title: status === "approved" ? "Saque aprovado!" : "Saque rejeitado",
         message: status === "approved" 
-          ? `Seu saque de R$ ${amount.toFixed(2)} foi aprovado e será processado em breve.`
+          ? `Seu saque de R$ ${amount.toFixed(2)} foi aprovado e será processado automaticamente.`
           : `Seu saque de R$ ${amount.toFixed(2)} foi rejeitado. O saldo foi devolvido à sua conta.`,
         type: status === "approved" ? "success" : "error",
         is_read: false,
@@ -105,9 +116,15 @@ const AdminWithdrawals = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Saques</h1>
-        <p className="text-muted-foreground">Gerenciar solicitações de saque</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Saques</h1>
+          <p className="text-muted-foreground">Gerenciar solicitações de saque</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Atualizar
+        </Button>
       </div>
 
       <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -115,6 +132,7 @@ const AdminWithdrawals = () => {
           <TableHeader>
             <TableRow>
               <TableHead>Usuário</TableHead>
+              <TableHead>CPF</TableHead>
               <TableHead>Valor</TableHead>
               <TableHead>Chave PIX</TableHead>
               <TableHead>Status</TableHead>
@@ -127,18 +145,21 @@ const AdminWithdrawals = () => {
               <TableRow key={withdrawal.id}>
                 <TableCell>
                   <div>
-                    <p className="font-medium">{withdrawal.profiles?.full_name || "N/A"}</p>
-                    <p className="text-xs text-muted-foreground">{withdrawal.profiles?.phone || "-"}</p>
+                    <p className="font-medium">{withdrawal.profile?.full_name || "N/A"}</p>
+                    <p className="text-xs text-muted-foreground">{withdrawal.profile?.phone || "-"}</p>
                   </div>
+                </TableCell>
+                <TableCell className="text-sm">
+                  {withdrawal.profile?.cpf || "-"}
                 </TableCell>
                 <TableCell className="font-bold text-red-500">
                   R$ {Number(withdrawal.amount).toFixed(2)}
                 </TableCell>
-                <TableCell className="max-w-[200px] truncate">
+                <TableCell className="max-w-[200px] truncate text-sm">
                   {withdrawal.pix_key || "-"}
                 </TableCell>
                 <TableCell>{getStatusBadge(withdrawal.status)}</TableCell>
-                <TableCell>
+                <TableCell className="text-sm">
                   {format(new Date(withdrawal.created_at), "dd/MM/yyyy HH:mm")}
                 </TableCell>
                 <TableCell>
@@ -147,7 +168,7 @@ const AdminWithdrawals = () => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-green-500"
+                        className="text-green-500 hover:text-green-600 hover:bg-green-500/10"
                         onClick={() => updateStatusMutation.mutate({ 
                           id: withdrawal.id, 
                           status: "approved",
@@ -160,7 +181,7 @@ const AdminWithdrawals = () => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-red-500"
+                        className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
                         onClick={() => updateStatusMutation.mutate({ 
                           id: withdrawal.id, 
                           status: "rejected",
@@ -177,7 +198,7 @@ const AdminWithdrawals = () => {
             ))}
             {withdrawals?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   Nenhum saque encontrado
                 </TableCell>
               </TableRow>
