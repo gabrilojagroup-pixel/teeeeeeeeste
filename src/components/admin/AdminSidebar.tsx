@@ -10,6 +10,7 @@ import {
   Network,
   LogOut,
   Shield,
+  Bell,
   Menu,
   X
 } from "lucide-react";
@@ -27,6 +28,7 @@ interface AdminSidebarProps {
 const menuItems: { id: AdminTabType; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "users", label: "Usuários", icon: Users },
+  { id: "notifications", label: "Notificações", icon: Bell },
   { id: "withdrawals", label: "Saques", icon: ArrowUpCircle },
   { id: "deposits", label: "Depósitos", icon: ArrowDownCircle },
   { id: "plans", label: "Planos", icon: TrendingUp },

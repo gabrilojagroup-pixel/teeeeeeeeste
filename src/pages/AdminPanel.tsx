@@ -9,6 +9,7 @@ import AdminPlans from "@/components/admin/AdminPlans";
 import AdminSettings from "@/components/admin/AdminSettings";
 import AdminSponsorships from "@/components/admin/AdminSponsorships";
 import AdminAffiliate from "@/components/admin/AdminAffiliate";
+import AdminNotifications from "@/components/admin/AdminNotifications";
 
 export type AdminTabType = 
   | "dashboard" 
@@ -18,7 +19,8 @@ export type AdminTabType =
   | "plans" 
   | "settings" 
   | "sponsorships"
-  | "affiliate";
+  | "affiliate"
+  | "notifications";
 
 const AdminPanel = () => {
   const { loading, isAdmin } = useAdminAuth();
@@ -54,6 +56,8 @@ const AdminPanel = () => {
         return <AdminSponsorships />;
       case "affiliate":
         return <AdminAffiliate />;
+      case "notifications":
+        return <AdminNotifications />;
       default:
         return <AdminDashboard />;
     }
