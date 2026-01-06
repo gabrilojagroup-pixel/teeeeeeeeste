@@ -1,22 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowUpCircle, Wallet, Clock, CheckCircle, XCircle } from "lucide-react";
+import { ArrowUpCircle, Wallet, Clock, CheckCircle, XCircle, User, Phone, Key, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 
 // Função para validar CPF
 const validateCPF = (cpf: string): boolean => {
   const cleanCPF = cpf.replace(/\D/g, '');
-  
   if (cleanCPF.length !== 11) return false;
-  
-  // Verifica se todos os dígitos são iguais
   if (/^(\d)\1+$/.test(cleanCPF)) return false;
   
-  // Validação do primeiro dígito verificador
   let sum = 0;
   for (let i = 0; i < 9; i++) {
     sum += parseInt(cleanCPF[i]) * (10 - i);
@@ -25,7 +22,6 @@ const validateCPF = (cpf: string): boolean => {
   if (remainder === 10 || remainder === 11) remainder = 0;
   if (remainder !== parseInt(cleanCPF[9])) return false;
   
-  // Validação do segundo dígito verificador
   sum = 0;
   for (let i = 0; i < 10; i++) {
     sum += parseInt(cleanCPF[i]) * (11 - i);
@@ -37,38 +33,41 @@ const validateCPF = (cpf: string): boolean => {
   return true;
 };
 
-// Formatar CPF enquanto digita
+// Formatar CPF
 const formatCPF = (value: string): string => {
   const cleanValue = value.replace(/\D/g, '').slice(0, 11);
-  
   if (cleanValue.length <= 3) return cleanValue;
   if (cleanValue.length <= 6) return `${cleanValue.slice(0, 3)}.${cleanValue.slice(3)}`;
   if (cleanValue.length <= 9) return `${cleanValue.slice(0, 3)}.${cleanValue.slice(3, 6)}.${cleanValue.slice(6)}`;
   return `${cleanValue.slice(0, 3)}.${cleanValue.slice(3, 6)}.${cleanValue.slice(6, 9)}-${cleanValue.slice(9)}`;
 };
 
+// Formatar telefone
+const formatPhone = (value: string): string => {
+  const cleanValue = value.replace(/\D/g, '').slice(0, 11);
+  if (cleanValue.length <= 2) return cleanValue;
+  if (cleanValue.length <= 7) return `(${cleanValue.slice(0, 2)}) ${cleanValue.slice(2)}`;
+  return `(${cleanValue.slice(0, 2)}) ${cleanValue.slice(2, 7)}-${cleanValue.slice(7)}`;
+};
+
 const WithdrawTab = () => {
   const { user, profile, refreshProfile } = useAuth();
   const [amount, setAmount] = useState("");
-  const [pixKey, setPixKey] = useState("");
+  const [name, setName] = useState("");
   const [cpf, setCpf] = useState("");
+  const [phone, setPhone] = useState("");
+  const [pixKey, setPixKey] = useState("");
   const [cpfError, setCpfError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [cpfLoaded, setCpfLoaded] = useState(false);
 
-  // Load CPF from profile on mount
-  useState(() => {
-    if (profile?.cpf && !cpfLoaded) {
-      setCpf(formatCPF(profile.cpf));
-      setCpfLoaded(true);
+  // Load data from profile
+  useEffect(() => {
+    if (profile) {
+      if (profile.full_name && !name) setName(profile.full_name);
+      if (profile.cpf && !cpf) setCpf(formatCPF(profile.cpf));
+      if (profile.phone && !phone) setPhone(formatPhone(profile.phone));
     }
-  });
-
-  // Update CPF when profile loads
-  if (profile?.cpf && !cpfLoaded) {
-    setCpf(formatCPF(profile.cpf));
-    setCpfLoaded(true);
-  }
+  }, [profile]);
 
   const { data: withdrawals, refetch: refetchWithdrawals } = useQuery({
     queryKey: ["withdrawals", user?.id],
@@ -88,17 +87,16 @@ const WithdrawTab = () => {
   const handleCpfChange = (value: string) => {
     const formatted = formatCPF(value);
     setCpf(formatted);
-    
     const cleanCPF = value.replace(/\D/g, '');
     if (cleanCPF.length === 11) {
-      if (!validateCPF(cleanCPF)) {
-        setCpfError("CPF inválido");
-      } else {
-        setCpfError("");
-      }
+      setCpfError(validateCPF(cleanCPF) ? "" : "CPF inválido");
     } else {
       setCpfError("");
     }
+  };
+
+  const handlePhoneChange = (value: string) => {
+    setPhone(formatPhone(value));
   };
 
   const handleWithdraw = async () => {
@@ -115,39 +113,48 @@ const WithdrawTab = () => {
       return;
     }
 
-    if (!pixKey.trim()) {
-      toast.error("Informe sua chave PIX");
+    if (!name.trim()) {
+      toast.error("Informe seu nome completo");
       return;
     }
 
     const cleanCPF = cpf.replace(/\D/g, '');
-    if (!cleanCPF || cleanCPF.length !== 11) {
-      toast.error("Informe seu CPF");
+    if (!cleanCPF || cleanCPF.length !== 11 || !validateCPF(cleanCPF)) {
+      toast.error("Informe um CPF válido");
       return;
     }
 
-    if (!validateCPF(cleanCPF)) {
-      toast.error("CPF inválido");
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      toast.error("Informe um telefone válido");
+      return;
+    }
+
+    if (!pixKey.trim()) {
+      toast.error("Informe sua chave PIX");
       return;
     }
 
     setLoading(true);
 
     try {
-      // Save CPF to profile if not already saved
-      if (!profile.cpf || profile.cpf !== cleanCPF) {
-        await supabase
-          .from('profiles')
-          .update({ cpf: cleanCPF })
-          .eq('id', profile.id);
-      }
+      // Save data to profile
+      await supabase
+        .from('profiles')
+        .update({ 
+          full_name: name.trim(),
+          cpf: cleanCPF,
+          phone: cleanPhone 
+        })
+        .eq('id', profile.id);
 
       const response = await supabase.functions.invoke('create-pix-withdraw', {
         body: {
           amount: withdrawAmount,
           pixKey: pixKey.trim(),
-          name: profile.full_name,
+          name: name.trim(),
           document: cpf,
+          phone: phone,
         },
       });
 
@@ -168,7 +175,6 @@ const WithdrawTab = () => {
       await refetchWithdrawals();
       setAmount("");
       setPixKey("");
-      setCpf("");
     } catch (error: any) {
       console.error('Withdraw error:', error);
       toast.error(error.message || "Erro ao solicitar saque");
@@ -201,15 +207,62 @@ const WithdrawTab = () => {
     }
   };
 
-  const isFormValid = amount && pixKey && cpf.replace(/\D/g, '').length === 11 && !cpfError;
+  const isFormValid = amount && name.trim() && cpf.replace(/\D/g, '').length === 11 && !cpfError && phone.replace(/\D/g, '').length >= 10 && pixKey.trim();
+
+  // Loading state
+  if (loading) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+        <div className="text-center">
+          <h1 className="text-xl font-bold text-foreground">Processando Saque</h1>
+          <p className="text-muted-foreground text-sm">Aguarde enquanto processamos seu saque...</p>
+        </div>
+
+        <div className="bg-card rounded-xl p-8 border border-border">
+          <div className="flex flex-col items-center justify-center space-y-6">
+            <motion.div
+              animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="w-24 h-24 rounded-full bg-gradient-to-br from-violet-500/20 to-primary/20 flex items-center justify-center border-2 border-violet-500/30"
+            >
+              <ArrowUpCircle className="w-12 h-12 text-violet-500" />
+            </motion.div>
+
+            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+              <Loader2 className="w-8 h-8 text-violet-500" />
+            </motion.div>
+
+            <div className="space-y-3 w-full max-w-xs">
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-violet-500 flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-sm text-foreground">Validando dados...</span>
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }} className="flex items-center gap-3">
+                <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 0.8, repeat: Infinity }} className="w-6 h-6 rounded-full bg-violet-500/50 flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                </motion.div>
+                <span className="text-sm text-muted-foreground">Enviando para sua chave PIX...</span>
+              </motion.div>
+            </div>
+
+            <motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }} className="text-center mt-4">
+              <p className="text-sm text-muted-foreground">Valor do saque</p>
+              <p className="text-2xl font-bold text-violet-500">R$ {parseFloat(amount || "0").toFixed(2)}</p>
+            </motion.div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="text-xl font-bold text-foreground">Sacar</h1>
-        <p className="text-muted-foreground text-sm">
-          Retire seu saldo via PIX automático
-        </p>
+        <p className="text-muted-foreground text-sm">Retire seu saldo via PIX automático</p>
       </div>
 
       {/* Balance */}
@@ -218,17 +271,62 @@ const WithdrawTab = () => {
           <Wallet className="w-5 h-5 text-primary" />
           <span className="text-sm text-muted-foreground">Saldo Disponível</span>
         </div>
-        <p className="text-3xl font-bold text-foreground">
-          R$ {profile?.balance?.toFixed(2) || "0.00"}
-        </p>
+        <p className="text-3xl font-bold text-foreground">R$ {profile?.balance?.toFixed(2) || "0.00"}</p>
       </div>
 
-      {/* Withdraw Form */}
+      {/* Personal Data */}
       <div className="space-y-4">
+        <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+          <User className="w-4 h-4" />
+          Dados Pessoais
+        </h3>
+
         <div>
-          <label className="text-sm text-muted-foreground mb-2 block">
-            Valor do saque
-          </label>
+          <label className="text-sm text-muted-foreground mb-2 block">Nome Completo</label>
+          <Input
+            type="text"
+            placeholder="Seu nome completo"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-12"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm text-muted-foreground mb-2 block">CPF</label>
+          <Input
+            type="text"
+            placeholder="000.000.000-00"
+            value={cpf}
+            onChange={(e) => handleCpfChange(e.target.value)}
+            className={`h-12 ${cpfError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+            maxLength={14}
+          />
+          {cpfError && <p className="text-xs text-red-500 mt-1">{cpfError}</p>}
+        </div>
+
+        <div>
+          <label className="text-sm text-muted-foreground mb-2 block">Telefone</label>
+          <Input
+            type="text"
+            placeholder="(00) 00000-0000"
+            value={phone}
+            onChange={(e) => handlePhoneChange(e.target.value)}
+            className="h-12"
+            maxLength={15}
+          />
+        </div>
+      </div>
+
+      {/* PIX Key */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+          <Key className="w-4 h-4" />
+          Dados do Saque
+        </h3>
+
+        <div>
+          <label className="text-sm text-muted-foreground mb-2 block">Valor do saque</label>
           <Input
             type="number"
             placeholder="Mínimo R$ 30,00"
@@ -239,26 +337,7 @@ const WithdrawTab = () => {
         </div>
 
         <div>
-          <label className="text-sm text-muted-foreground mb-2 block">
-            CPF do titular da conta
-          </label>
-          <Input
-            type="text"
-            placeholder="000.000.000-00"
-            value={cpf}
-            onChange={(e) => handleCpfChange(e.target.value)}
-            className={`h-12 ${cpfError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
-            maxLength={14}
-          />
-          {cpfError && (
-            <p className="text-xs text-red-500 mt-1">{cpfError}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="text-sm text-muted-foreground mb-2 block">
-            Chave PIX (CPF, E-mail, Telefone ou Aleatória)
-          </label>
+          <label className="text-sm text-muted-foreground mb-2 block">Chave PIX (CPF, E-mail, Telefone ou Aleatória)</label>
           <Input
             type="text"
             placeholder="Sua chave PIX"
@@ -268,12 +347,7 @@ const WithdrawTab = () => {
           />
         </div>
 
-        <Button
-          variant="gradient"
-          className="w-full"
-          onClick={handleWithdraw}
-          disabled={loading || !isFormValid}
-        >
+        <Button variant="gradient" className="w-full" onClick={handleWithdraw} disabled={loading || !isFormValid}>
           {loading ? "Processando..." : "Solicitar Saque"}
         </Button>
       </div>
@@ -290,35 +364,24 @@ const WithdrawTab = () => {
 
       {/* History */}
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-3">
-          Histórico de Saques
-        </h2>
+        <h2 className="text-lg font-semibold text-foreground mb-3">Histórico de Saques</h2>
 
         {withdrawals && withdrawals.length > 0 ? (
           <div className="space-y-3">
             {withdrawals.map((withdrawal: any) => (
-              <div
-                key={withdrawal.id}
-                className="bg-card rounded-xl p-4 border border-border flex items-center justify-between"
-              >
+              <div key={withdrawal.id} className="bg-card rounded-xl p-4 border border-border flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center">
                     <ArrowUpCircle className="w-5 h-5 text-violet-500" />
                   </div>
                   <div>
-                    <p className="font-medium text-foreground">
-                      R$ {Number(withdrawal.amount).toFixed(2)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(withdrawal.created_at).toLocaleDateString("pt-BR")}
-                    </p>
+                    <p className="font-medium text-foreground">R$ {Number(withdrawal.amount).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(withdrawal.created_at).toLocaleDateString("pt-BR")}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {getStatusIcon(withdrawal.status)}
-                  <span className="text-sm text-muted-foreground">
-                    {getStatusText(withdrawal.status)}
-                  </span>
+                  <span className="text-sm text-muted-foreground">{getStatusText(withdrawal.status)}</span>
                 </div>
               </div>
             ))}
@@ -326,9 +389,7 @@ const WithdrawTab = () => {
         ) : (
           <div className="bg-card rounded-xl p-6 border border-border text-center">
             <ArrowUpCircle className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">
-              Você ainda não fez nenhum saque
-            </p>
+            <p className="text-muted-foreground">Você ainda não fez nenhum saque</p>
           </div>
         )}
       </div>
