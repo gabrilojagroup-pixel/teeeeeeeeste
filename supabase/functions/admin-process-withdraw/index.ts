@@ -161,11 +161,11 @@ Deno.serve(async (req) => {
             key: pixKey,
           },
           owner: {
-            ip: '127.0.0.1',
+            ip: '177.38.0.1',
             name: profile?.full_name || 'Cliente',
             document: {
               type: 'cpf',
-              number: profile?.cpf || '000.000.000-00',
+              number: (profile?.cpf || '00000000000').replace(/\D/g, ''),
             },
           },
           callbackUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/poseidonpay-webhook`,
