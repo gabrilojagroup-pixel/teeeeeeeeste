@@ -19,19 +19,38 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    // Get transaction info from various payload formats
+    const event = payload.event
+    const transactionData = payload.transaction || payload
+    const transactionId = transactionData?.id || payload.transactionId || payload.id
+    const identifier = transactionData?.identifier || payload.identifier
+    const status = transactionData?.status || payload.status
+
+    console.log('Processing:', { event, transactionId, identifier, status })
+
     // Handle deposit (transaction) webhook
-    if (payload.transactionId || payload.id) {
-      const transactionId = payload.transactionId || payload.id
-      const status = payload.status
+    if (transactionId || identifier) {
+      // Try to find by identifier first, then by transactionId
+      let transactions = null
+      
+      if (identifier) {
+        const { data } = await supabase
+          .from('transactions')
+          .select('*')
+          .like('description', `%${identifier}%`)
+        transactions = data
+      }
+      
+      if ((!transactions || transactions.length === 0) && transactionId) {
+        const { data } = await supabase
+          .from('transactions')
+          .select('*')
+          .like('description', `%${transactionId}%`)
+        transactions = data
+      }
 
-      // Find the transaction by description containing the transaction ID
-      const { data: transactions, error: findError } = await supabase
-        .from('transactions')
-        .select('*')
-        .like('description', `%${transactionId}%`)
-
-      if (findError || !transactions || transactions.length === 0) {
-        console.log('Transaction not found for:', transactionId)
+      if (!transactions || transactions.length === 0) {
+        console.log('Transaction not found for:', { transactionId, identifier })
         return new Response(
           JSON.stringify({ received: true }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -39,14 +58,19 @@ Deno.serve(async (req) => {
       }
 
       const transaction = transactions[0]
+      console.log('Found transaction:', transaction.id, 'current status:', transaction.status)
 
       // Map PoseidonPay status to our status
-      let newStatus = 'pending'
-      if (status === 'COMPLETED') {
+      let newStatus = transaction.status // Keep current status by default
+      if (status === 'COMPLETED' || status === 'PAID' || event === 'TRANSACTION_PAID') {
         newStatus = 'approved'
-      } else if (status === 'FAILED' || status === 'REFUNDED' || status === 'CHARGED_BACK') {
+      } else if (status === 'FAILED' || status === 'REFUNDED' || status === 'CHARGED_BACK' || status === 'EXPIRED') {
         newStatus = 'rejected'
+      } else if (status === 'PENDING') {
+        newStatus = 'pending'
       }
+      
+      console.log('Status mapping:', status, '->', newStatus)
 
       // Update transaction status
       await supabase
