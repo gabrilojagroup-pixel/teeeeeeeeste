@@ -1,11 +1,23 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Wallet, PiggyBank, TrendingUp, Users } from "lucide-react";
+import { Wallet, PiggyBank, TrendingUp, Users, ArrowRightLeft, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 const HomeTab = () => {
-  const { profile, user } = useAuth();
-
+  const { profile, user, refreshProfile } = useAuth();
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferAmount, setTransferAmount] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
   const { data: investments } = useQuery({
     queryKey: ["user-investments", user?.id],
     queryFn: async () => {
@@ -33,6 +45,60 @@ const HomeTab = () => {
 
   const totalInvested = investments?.reduce((sum, inv) => sum + Number(inv.amount), 0) || 0;
 
+  const handleTransfer = async () => {
+    const amount = parseFloat(transferAmount);
+    const maxAmount = profile?.accumulated_balance || 0;
+
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Digite um valor válido");
+      return;
+    }
+
+    if (amount > maxAmount) {
+      toast.error("Valor maior que o saldo acumulado disponível");
+      return;
+    }
+
+    setIsTransferring(true);
+
+    try {
+      // Update balances
+      const newAccumulated = maxAmount - amount;
+      const newBalance = (profile?.balance || 0) + amount;
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          accumulated_balance: newAccumulated,
+          balance: newBalance,
+        })
+        .eq("user_id", user?.id);
+
+      if (updateError) throw updateError;
+
+      // Record transaction
+      await supabase.from("transactions").insert({
+        user_id: user?.id,
+        type: "transfer",
+        amount: amount,
+        status: "completed",
+        description: "Transferência de saldo acumulado para disponível",
+      });
+
+      toast.success(`R$ ${amount.toFixed(2)} transferido com sucesso!`);
+      setShowTransferDialog(false);
+      setTransferAmount("");
+      await refreshProfile();
+    } catch (error: any) {
+      toast.error("Erro ao transferir: " + error.message);
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const setMaxAmount = () => {
+    setTransferAmount(String(profile?.accumulated_balance || 0));
+  };
   return (
     <div className="space-y-6">
       {/* Welcome */}
@@ -65,6 +131,17 @@ const HomeTab = () => {
           <p className="text-xl font-bold text-green-500">
             R$ {profile?.accumulated_balance?.toFixed(2) || "0.00"}
           </p>
+          {(profile?.accumulated_balance || 0) > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full mt-2 text-xs h-8"
+              onClick={() => setShowTransferDialog(true)}
+            >
+              <ArrowRightLeft className="w-3 h-3 mr-1" />
+              Transferir
+            </Button>
+          )}
         </div>
       </div>
 
@@ -149,6 +226,77 @@ const HomeTab = () => {
           </div>
         )}
       </div>
+
+      {/* Transfer Dialog */}
+      <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transferir Saldo</DialogTitle>
+            <DialogDescription>
+              Transfira seu saldo acumulado para o saldo disponível
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-4">
+            <div className="bg-secondary/50 rounded-lg p-4">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-muted-foreground">Saldo Acumulado:</span>
+                <span className="text-green-500 font-medium">
+                  R$ {profile?.accumulated_balance?.toFixed(2) || "0.00"}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Saldo Disponível:</span>
+                <span className="text-foreground font-medium">
+                  R$ {profile?.balance?.toFixed(2) || "0.00"}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm text-muted-foreground mb-2 block">
+                Valor a transferir
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="R$ 0,00"
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                  className="h-12"
+                  max={profile?.accumulated_balance || 0}
+                />
+                <Button
+                  variant="outline"
+                  onClick={setMaxAmount}
+                  className="h-12 px-4"
+                >
+                  MAX
+                </Button>
+              </div>
+            </div>
+
+            <Button
+              variant="gradient"
+              className="w-full"
+              onClick={handleTransfer}
+              disabled={isTransferring || !transferAmount}
+            >
+              {isTransferring ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Transferindo...
+                </>
+              ) : (
+                <>
+                  <ArrowRightLeft className="w-4 h-4 mr-2" />
+                  Confirmar Transferência
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
