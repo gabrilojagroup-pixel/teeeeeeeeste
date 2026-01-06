@@ -132,8 +132,8 @@ const AdminWithdrawals = () => {
           <TableHeader>
             <TableRow>
               <TableHead>Usuário</TableHead>
-              <TableHead>CPF</TableHead>
               <TableHead>Valor</TableHead>
+              <TableHead>Líquido / Taxa</TableHead>
               <TableHead>Chave PIX</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Data</TableHead>
@@ -141,27 +141,36 @@ const AdminWithdrawals = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {withdrawals?.map((withdrawal: any) => (
-              <TableRow key={withdrawal.id}>
-                <TableCell>
-                  <div>
-                    <p className="font-medium">{withdrawal.profile?.full_name || "N/A"}</p>
-                    <p className="text-xs text-muted-foreground">{withdrawal.profile?.phone || "-"}</p>
-                  </div>
-                </TableCell>
-                <TableCell className="text-sm">
-                  {withdrawal.profile?.cpf || "-"}
-                </TableCell>
-                <TableCell className="font-bold text-red-500">
-                  R$ {Number(withdrawal.amount).toFixed(2)}
-                </TableCell>
-                <TableCell className="max-w-[200px] truncate text-sm">
-                  {withdrawal.pix_key || "-"}
-                </TableCell>
-                <TableCell>{getStatusBadge(withdrawal.status)}</TableCell>
-                <TableCell className="text-sm">
-                  {format(new Date(withdrawal.created_at), "dd/MM/yyyy HH:mm")}
-                </TableCell>
+            {withdrawals?.map((withdrawal: any) => {
+              const amount = Number(withdrawal.amount);
+              const fee = amount * 0.10;
+              const netAmount = amount - fee;
+              
+              return (
+                <TableRow key={withdrawal.id}>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium">{withdrawal.profile?.full_name || "N/A"}</p>
+                      <p className="text-xs text-muted-foreground">{withdrawal.profile?.phone || "-"}</p>
+                      <p className="text-xs text-muted-foreground">CPF: {withdrawal.profile?.cpf || "-"}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-bold text-red-500">
+                    R$ {amount.toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">
+                      <p className="text-green-500 font-medium">R$ {netAmount.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">Taxa: R$ {fee.toFixed(2)}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-[200px] truncate text-sm">
+                    {withdrawal.pix_key || "-"}
+                  </TableCell>
+                  <TableCell>{getStatusBadge(withdrawal.status)}</TableCell>
+                  <TableCell className="text-sm">
+                    {format(new Date(withdrawal.created_at), "dd/MM/yyyy HH:mm")}
+                  </TableCell>
                 <TableCell>
                   {withdrawal.status === "pending" && (
                     <div className="flex items-center gap-2">
@@ -195,7 +204,8 @@ const AdminWithdrawals = () => {
                   )}
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
             {withdrawals?.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
