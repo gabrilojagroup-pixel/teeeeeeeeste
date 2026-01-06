@@ -1,24 +1,29 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { User, Mail, Lock, Eye, EyeOff, Phone, Gift, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Logo from "@/components/Logo";
 import DecorativeLines from "@/components/DecorativeLines";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 const benefits = [
-  { icon: CheckCircle, text: "Rendimento diário de 2%" },
-  { icon: CheckCircle, text: "Saques ilimitados e instantâneos" },
-  { icon: CheckCircle, text: "Ganhe 10% por indicação" },
-  { icon: CheckCircle, text: "Plataforma 100% segura" },
+  { icon: CheckCircle, text: "Rendimento diário de até 3.5%" },
+  { icon: CheckCircle, text: "Saques instantâneos via PIX" },
+  { icon: CheckCircle, text: "Ganhe até 25% por indicação" },
+  { icon: CheckCircle, text: "Check-in diário +R$ 1,00" },
 ];
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+  
   const [formData, setFormData] = useState({
-    referralCode: "",
+    referralCode: searchParams.get("ref") || "",
     name: "",
     email: "",
     phone: "",
@@ -26,14 +31,64 @@ const Register = () => {
     confirmPassword: "",
   });
 
+  const { signUp, user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate("/dashboard");
+    }
+  }, [user, authLoading, navigate]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Register:", formData);
+
+    if (!formData.name || !formData.email || !formData.password) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      toast.error("As senhas não coincidem");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error("A senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } = await signUp(
+      formData.email,
+      formData.password,
+      formData.name,
+      formData.phone,
+      formData.referralCode
+    );
+
+    if (error) {
+      toast.error(error.message || "Erro ao criar conta");
+      setLoading(false);
+      return;
+    }
+
+    toast.success("Conta criada com sucesso!");
+    navigate("/dashboard");
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background relative flex items-center justify-center p-4 py-8">
@@ -50,7 +105,7 @@ const Register = () => {
               <span className="text-gradient-purple">com segurança</span>
             </h1>
             <p className="mt-4 text-lg text-muted-foreground">
-              Ganhe até 2% ao dia com rendimentos automáticos e saques instantâneos.
+              Ganhe até 3.5% ao dia com rendimentos automáticos e saques instantâneos.
             </p>
           </div>
 
@@ -98,7 +153,7 @@ const Register = () => {
                   <Input
                     id="referralCode"
                     name="referralCode"
-                    placeholder="Ex: FUT1A2B3C"
+                    placeholder="Ex: ABC123DEF4"
                     value={formData.referralCode}
                     onChange={handleChange}
                     className="pl-10 h-11"
@@ -198,8 +253,8 @@ const Register = () => {
                 </div>
               </div>
 
-              <Button type="submit" variant="gradient" size="lg" className="w-full mt-2">
-                Criar Conta Grátis
+              <Button type="submit" variant="gradient" size="lg" className="w-full mt-2" disabled={loading}>
+                {loading ? "Criando conta..." : "Criar Conta Grátis"}
               </Button>
             </form>
 

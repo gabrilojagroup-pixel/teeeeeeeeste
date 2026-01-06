@@ -14,7 +14,231 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      affiliate_commissions: {
+        Row: {
+          amount: number
+          beneficiary_id: string
+          created_at: string | null
+          id: string
+          investment_id: string | null
+          level: number
+          source_user_id: string
+        }
+        Insert: {
+          amount: number
+          beneficiary_id: string
+          created_at?: string | null
+          id?: string
+          investment_id?: string | null
+          level: number
+          source_user_id: string
+        }
+        Update: {
+          amount?: number
+          beneficiary_id?: string
+          created_at?: string | null
+          id?: string
+          investment_id?: string | null
+          level?: number
+          source_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_commissions_investment_id_fkey"
+            columns: ["investment_id"]
+            isOneToOne: false
+            referencedRelation: "user_investments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_checkins: {
+        Row: {
+          checkin_date: string
+          created_at: string | null
+          id: string
+          reward_amount: number | null
+          user_id: string
+        }
+        Insert: {
+          checkin_date?: string
+          created_at?: string | null
+          id?: string
+          reward_amount?: number | null
+          user_id: string
+        }
+        Update: {
+          checkin_date?: string
+          created_at?: string | null
+          id?: string
+          reward_amount?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      investment_plans: {
+        Row: {
+          created_at: string | null
+          daily_return_percentage: number
+          duration_days: number
+          id: string
+          is_active: boolean | null
+          max_amount: number
+          min_amount: number
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          daily_return_percentage: number
+          duration_days: number
+          id?: string
+          is_active?: boolean | null
+          max_amount: number
+          min_amount: number
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          daily_return_percentage?: number
+          duration_days?: number
+          id?: string
+          is_active?: boolean | null
+          max_amount?: number
+          min_amount?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          accumulated_balance: number | null
+          balance: number | null
+          created_at: string | null
+          full_name: string
+          id: string
+          last_checkin_date: string | null
+          phone: string | null
+          referral_code: string
+          referred_by: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          accumulated_balance?: number | null
+          balance?: number | null
+          created_at?: string | null
+          full_name: string
+          id?: string
+          last_checkin_date?: string | null
+          phone?: string | null
+          referral_code?: string
+          referred_by?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          accumulated_balance?: number | null
+          balance?: number | null
+          created_at?: string | null
+          full_name?: string
+          id?: string
+          last_checkin_date?: string | null
+          phone?: string | null
+          referral_code?: string
+          referred_by?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transactions: {
+        Row: {
+          amount: number
+          created_at: string | null
+          description: string | null
+          id: string
+          pix_key: string | null
+          status: string | null
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          pix_key?: string | null
+          status?: string | null
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          pix_key?: string | null
+          status?: string | null
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_investments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          daily_return: number
+          end_date: string
+          id: string
+          plan_id: string
+          start_date: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          daily_return: number
+          end_date: string
+          id?: string
+          plan_id: string
+          start_date?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          daily_return?: number
+          end_date?: string
+          id?: string
+          plan_id?: string
+          start_date?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_investments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "investment_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
