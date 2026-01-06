@@ -1,1 +1,4 @@
 project_id = "ommxogzigfoavgnsvcox"
+
+[functions.process-daily-returns]
+verify_jwt = false
