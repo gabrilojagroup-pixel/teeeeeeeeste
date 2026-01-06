@@ -5,6 +5,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+function detectPixType(pixKey: string): 'cpf' | 'cnpj' | 'phone' | 'email' | 'random' {
+  const cleanKey = pixKey.replace(/[^\w@.+-]/g, '')
+  
+  if (cleanKey.includes('@')) return 'email'
+  if (/^\d{11}$/.test(cleanKey.replace(/\D/g, ''))) {
+    if (cleanKey.includes('(') || cleanKey.includes('+')) return 'phone'
+    return 'cpf'
+  }
+  if (/^\d{14}$/.test(cleanKey.replace(/\D/g, ''))) return 'cnpj'
+  if (/^\+?\d{10,13}$/.test(cleanKey.replace(/\D/g, ''))) return 'phone'
+  return 'random'
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -120,19 +133,65 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'approve') {
-      // MANUAL WITHDRAWAL - Admin approves and does PIX transfer manually outside the system
+      // Calculate fee and net amount
       const amount = Number(transaction.amount)
       const feeAmount = amount * 0.10
       const amountAfterFee = amount - feeAmount
 
-      console.log(`Approving manual withdraw: amount=${amount}, fee=${feeAmount}, net=${amountAfterFee}, pix=${transaction.pix_key}`)
+      const pixKey = transaction.pix_key
+      const pixType = detectPixType(pixKey)
+      const identifier = `wit_${transaction.id}_${Date.now()}`
 
-      // Update transaction status to approved
+      console.log(`Processing automatic PIX withdraw: amount=${amount}, fee=${feeAmount}, net=${amountAfterFee}, pix=${pixKey}, type=${pixType}`)
+
+      // Call PoseidonPay API to send PIX automatically
+      const poseidonResponse = await fetch('https://app.poseidonpay.site/api/v1/gateway/transfers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-public-key': Deno.env.get('POSEIDONPAY_PUBLIC_KEY')!,
+          'x-secret-key': Deno.env.get('POSEIDONPAY_SECRET_KEY')!,
+        },
+        body: JSON.stringify({
+          identifier,
+          amount: amountAfterFee,
+          discountFeeOfReceiver: true,
+          pix: {
+            type: pixType,
+            key: pixKey,
+          },
+          owner: {
+            ip: '177.38.0.1',
+            name: profile?.full_name || 'Cliente',
+            document: {
+              type: 'cpf',
+              number: (profile?.cpf || '00000000000').replace(/\D/g, ''),
+            },
+          },
+          callbackUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/poseidonpay-webhook`,
+        }),
+      })
+
+      const poseidonData = await poseidonResponse.json()
+      console.log('PoseidonPay response:', JSON.stringify(poseidonData))
+
+      if (!poseidonResponse.ok || poseidonData.withdraw?.status === 'CANCELED') {
+        console.error('PoseidonPay error:', poseidonData)
+        return new Response(
+          JSON.stringify({ 
+            error: poseidonData.message || poseidonData.withdraw?.rejectedReason || 'Erro ao processar transferência PIX',
+            details: poseidonData
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Update transaction status
       await serviceRoleClient
         .from('transactions')
         .update({ 
           status: 'approved',
-          description: `Saque aprovado - PIX: ${transaction.pix_key} - Valor líquido: R$ ${amountAfterFee.toFixed(2)}`
+          description: `PIX enviado automaticamente - ID: ${poseidonData.withdraw?.id || identifier}`
         })
         .eq('id', transactionId)
 
@@ -140,15 +199,16 @@ Deno.serve(async (req) => {
       await serviceRoleClient.from('notifications').insert({
         user_id: transaction.user_id,
         title: 'Saque aprovado!',
-        message: `Seu saque de R$ ${amount.toFixed(2)} foi aprovado! Valor líquido de R$ ${amountAfterFee.toFixed(2)} será enviado para sua chave PIX em breve.`,
+        message: `Seu saque de R$ ${amount.toFixed(2)} foi aprovado! Valor líquido de R$ ${amountAfterFee.toFixed(2)} enviado para sua chave PIX.`,
         type: 'success',
       })
 
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Saque aprovado! Realize o PIX manualmente.',
-          pixKey: transaction.pix_key,
+          message: 'Saque aprovado e PIX enviado automaticamente!',
+          withdrawId: poseidonData.withdraw?.id,
+          status: poseidonData.withdraw?.status,
           netAmount: amountAfterFee
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
