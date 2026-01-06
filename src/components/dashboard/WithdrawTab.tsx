@@ -7,10 +7,52 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
+// Função para validar CPF
+const validateCPF = (cpf: string): boolean => {
+  const cleanCPF = cpf.replace(/\D/g, '');
+  
+  if (cleanCPF.length !== 11) return false;
+  
+  // Verifica se todos os dígitos são iguais
+  if (/^(\d)\1+$/.test(cleanCPF)) return false;
+  
+  // Validação do primeiro dígito verificador
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(cleanCPF[i]) * (10 - i);
+  }
+  let remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanCPF[9])) return false;
+  
+  // Validação do segundo dígito verificador
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(cleanCPF[i]) * (11 - i);
+  }
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanCPF[10])) return false;
+  
+  return true;
+};
+
+// Formatar CPF enquanto digita
+const formatCPF = (value: string): string => {
+  const cleanValue = value.replace(/\D/g, '').slice(0, 11);
+  
+  if (cleanValue.length <= 3) return cleanValue;
+  if (cleanValue.length <= 6) return `${cleanValue.slice(0, 3)}.${cleanValue.slice(3)}`;
+  if (cleanValue.length <= 9) return `${cleanValue.slice(0, 3)}.${cleanValue.slice(3, 6)}.${cleanValue.slice(6)}`;
+  return `${cleanValue.slice(0, 3)}.${cleanValue.slice(3, 6)}.${cleanValue.slice(6, 9)}-${cleanValue.slice(9)}`;
+};
+
 const WithdrawTab = () => {
   const { user, profile, refreshProfile } = useAuth();
   const [amount, setAmount] = useState("");
   const [pixKey, setPixKey] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [cpfError, setCpfError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const { data: withdrawals, refetch: refetchWithdrawals } = useQuery({
@@ -27,6 +69,22 @@ const WithdrawTab = () => {
     },
     enabled: !!user,
   });
+
+  const handleCpfChange = (value: string) => {
+    const formatted = formatCPF(value);
+    setCpf(formatted);
+    
+    const cleanCPF = value.replace(/\D/g, '');
+    if (cleanCPF.length === 11) {
+      if (!validateCPF(cleanCPF)) {
+        setCpfError("CPF inválido");
+      } else {
+        setCpfError("");
+      }
+    } else {
+      setCpfError("");
+    }
+  };
 
   const handleWithdraw = async () => {
     if (!user || !profile) return;
@@ -47,6 +105,17 @@ const WithdrawTab = () => {
       return;
     }
 
+    const cleanCPF = cpf.replace(/\D/g, '');
+    if (!cleanCPF || cleanCPF.length !== 11) {
+      toast.error("Informe seu CPF");
+      return;
+    }
+
+    if (!validateCPF(cleanCPF)) {
+      toast.error("CPF inválido");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -55,6 +124,7 @@ const WithdrawTab = () => {
           amount: withdrawAmount,
           pixKey: pixKey.trim(),
           name: profile.full_name,
+          document: cpf,
         },
       });
 
@@ -75,6 +145,7 @@ const WithdrawTab = () => {
       await refetchWithdrawals();
       setAmount("");
       setPixKey("");
+      setCpf("");
     } catch (error: any) {
       console.error('Withdraw error:', error);
       toast.error(error.message || "Erro ao solicitar saque");
@@ -106,6 +177,8 @@ const WithdrawTab = () => {
         return "Processando";
     }
   };
+
+  const isFormValid = amount && pixKey && cpf.replace(/\D/g, '').length === 11 && !cpfError;
 
   return (
     <div className="space-y-6">
@@ -144,6 +217,23 @@ const WithdrawTab = () => {
 
         <div>
           <label className="text-sm text-muted-foreground mb-2 block">
+            CPF do titular da conta
+          </label>
+          <Input
+            type="text"
+            placeholder="000.000.000-00"
+            value={cpf}
+            onChange={(e) => handleCpfChange(e.target.value)}
+            className={`h-12 ${cpfError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+            maxLength={14}
+          />
+          {cpfError && (
+            <p className="text-xs text-red-500 mt-1">{cpfError}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="text-sm text-muted-foreground mb-2 block">
             Chave PIX (CPF, E-mail, Telefone ou Aleatória)
           </label>
           <Input
@@ -159,7 +249,7 @@ const WithdrawTab = () => {
           variant="gradient"
           className="w-full"
           onClick={handleWithdraw}
-          disabled={loading || !amount || !pixKey}
+          disabled={loading || !isFormValid}
         >
           {loading ? "Processando..." : "Solicitar Saque"}
         </Button>
