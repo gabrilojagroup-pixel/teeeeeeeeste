@@ -37,7 +37,7 @@ const WithdrawTab = () => {
       return;
     }
 
-    if (withdrawAmount > profile.balance) {
+    if (withdrawAmount > (profile.balance || 0)) {
       toast.error("Saldo insuficiente");
       return;
     }
@@ -49,39 +49,38 @@ const WithdrawTab = () => {
 
     setLoading(true);
 
-    const { error: txError } = await supabase.from("transactions").insert({
-      user_id: user.id,
-      type: "withdrawal",
-      amount: withdrawAmount,
-      status: "pending",
-      pix_key: pixKey,
-      description: "Saque via PIX",
-    });
+    try {
+      const response = await supabase.functions.invoke('create-pix-withdraw', {
+        body: {
+          amount: withdrawAmount,
+          pixKey: pixKey.trim(),
+          name: profile.full_name,
+        },
+      });
 
-    if (txError) {
-      toast.error("Erro ao solicitar saque");
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const data = response.data;
+
+      if (data.error) {
+        toast.error(data.error);
+        setLoading(false);
+        return;
+      }
+
+      toast.success("Saque solicitado! Será processado automaticamente.");
+      await refreshProfile();
+      await refetchWithdrawals();
+      setAmount("");
+      setPixKey("");
+    } catch (error: any) {
+      console.error('Withdraw error:', error);
+      toast.error(error.message || "Erro ao solicitar saque");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Deduct from balance
-    const { error: balanceError } = await supabase
-      .from("profiles")
-      .update({ balance: profile.balance - withdrawAmount })
-      .eq("id", profile.id);
-
-    if (balanceError) {
-      toast.error("Erro ao atualizar saldo");
-      setLoading(false);
-      return;
-    }
-
-    toast.success("Saque solicitado! Será processado em até 24h.");
-    await refreshProfile();
-    await refetchWithdrawals();
-    setAmount("");
-    setPixKey("");
-    setLoading(false);
   };
 
   const getStatusIcon = (status: string) => {
@@ -104,7 +103,7 @@ const WithdrawTab = () => {
       case "rejected":
         return "Rejeitado";
       default:
-        return "Pendente";
+        return "Processando";
     }
   };
 
@@ -113,7 +112,7 @@ const WithdrawTab = () => {
       <div className="text-center">
         <h1 className="text-xl font-bold text-foreground">Sacar</h1>
         <p className="text-muted-foreground text-sm">
-          Retire seu saldo via PIX
+          Retire seu saldo via PIX automático
         </p>
       </div>
 
@@ -169,7 +168,7 @@ const WithdrawTab = () => {
       {/* Info */}
       <div className="bg-card rounded-xl p-4 border border-border">
         <p className="text-sm text-muted-foreground">
-          ⏰ <strong>Prazo:</strong> Saques são processados em até 24 horas úteis.
+          ⚡ <strong>PIX Automático:</strong> Saques são processados automaticamente via API.
         </p>
         <p className="text-sm text-muted-foreground mt-2">
           💰 <strong>Taxa:</strong> Sem taxas para saques acima de R$ 50,00.

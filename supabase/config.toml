@@ -2,3 +2,12 @@ project_id = "ommxogzigfoavgnsvcox"
 
 [functions.process-daily-returns]
 verify_jwt = false
+
+[functions.create-pix-deposit]
+verify_jwt = false
+
+[functions.create-pix-withdraw]
+verify_jwt = false
+
+[functions.poseidonpay-webhook]
+verify_jwt = false
