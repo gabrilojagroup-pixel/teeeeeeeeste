@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, TrendingUp, ArrowUpCircle, ArrowDownCircle, DollarSign, Package, Wallet, RefreshCw } from "lucide-react";
+import { Users, TrendingUp, ArrowUpCircle, ArrowDownCircle, DollarSign, Package, Wallet, RefreshCw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { format } from "date-fns";
 
 const AdminDashboard = () => {
   // Stats query
@@ -74,73 +75,36 @@ const AdminDashboard = () => {
       
       return response.data;
     },
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 60000,
+  });
+
+  // PIX transfers history query
+  const { data: pixTransfers } = useQuery({
+    queryKey: ["pix-transfers-history"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("id, amount, pix_key, status, updated_at, user_id")
+        .eq("type", "withdraw")
+        .eq("status", "approved")
+        .order("updated_at", { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      return data || [];
+    },
   });
 
   const statCards = [
-    {
-      label: "Total Usuários",
-      value: stats?.totalUsers || 0,
-      icon: Users,
-      color: "text-primary",
-      bg: "bg-primary/10",
-    },
-    {
-      label: "Pacotes Ativos",
-      value: stats?.activePackages || 0,
-      icon: Package,
-      color: "text-green-500",
-      bg: "bg-green-500/10",
-    },
-    {
-      label: "Saques Pendentes",
-      value: stats?.pendingWithdrawals || 0,
-      icon: ArrowUpCircle,
-      color: "text-red-500",
-      bg: "bg-red-500/10",
-    },
-    {
-      label: "Depósitos Pendentes",
-      value: stats?.pendingDeposits || 0,
-      icon: ArrowDownCircle,
-      color: "text-yellow-500",
-      bg: "bg-yellow-500/10",
-    },
-    {
-      label: "Saldo Rendimentos (Usuários)",
-      value: `R$ ${(stats?.totalAccumulated || 0).toFixed(2)}`,
-      icon: DollarSign,
-      color: "text-violet-500",
-      bg: "bg-violet-500/10",
-    },
-    {
-      label: "Saldo Indicações (Usuários)",
-      value: `R$ ${(stats?.totalBalance || 0).toFixed(2)}`,
-      icon: DollarSign,
-      color: "text-blue-500",
-      bg: "bg-blue-500/10",
-    },
-    {
-      label: "Total Entradas (Depósitos)",
-      value: `R$ ${(stats?.totalDeposits || 0).toFixed(2)}`,
-      icon: TrendingUp,
-      color: "text-green-500",
-      bg: "bg-green-500/10",
-    },
-    {
-      label: "Entradas de Hoje",
-      value: `R$ ${(stats?.todayDepositTotal || 0).toFixed(2)}`,
-      icon: TrendingUp,
-      color: "text-emerald-500",
-      bg: "bg-emerald-500/10",
-    },
-    {
-      label: "Total Saídas (Saques)",
-      value: `R$ ${(stats?.totalWithdrawals || 0).toFixed(2)}`,
-      icon: ArrowUpCircle,
-      color: "text-red-500",
-      bg: "bg-red-500/10",
-    },
+    { label: "Total Usuários", value: stats?.totalUsers || 0, icon: Users, color: "text-primary", bg: "bg-primary/10" },
+    { label: "Pacotes Ativos", value: stats?.activePackages || 0, icon: Package, color: "text-green-500", bg: "bg-green-500/10" },
+    { label: "Saques Pendentes", value: stats?.pendingWithdrawals || 0, icon: ArrowUpCircle, color: "text-red-500", bg: "bg-red-500/10" },
+    { label: "Depósitos Pendentes", value: stats?.pendingDeposits || 0, icon: ArrowDownCircle, color: "text-yellow-500", bg: "bg-yellow-500/10" },
+    { label: "Saldo Rendimentos (Usuários)", value: `R$ ${(stats?.totalAccumulated || 0).toFixed(2)}`, icon: DollarSign, color: "text-violet-500", bg: "bg-violet-500/10" },
+    { label: "Saldo Indicações (Usuários)", value: `R$ ${(stats?.totalBalance || 0).toFixed(2)}`, icon: DollarSign, color: "text-blue-500", bg: "bg-blue-500/10" },
+    { label: "Total Entradas (Depósitos)", value: `R$ ${(stats?.totalDeposits || 0).toFixed(2)}`, icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
+    { label: "Entradas de Hoje", value: `R$ ${(stats?.todayDepositTotal || 0).toFixed(2)}`, icon: TrendingUp, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+    { label: "Total Saídas (Saques)", value: `R$ ${(stats?.totalWithdrawals || 0).toFixed(2)}`, icon: ArrowUpCircle, color: "text-red-500", bg: "bg-red-500/10" },
   ];
 
   return (
@@ -164,18 +128,11 @@ const AdminDashboard = () => {
               ) : gatewayBalance?.error ? (
                 <p className="text-lg font-semibold text-destructive">Erro ao carregar</p>
               ) : (
-                <p className="text-3xl font-bold text-primary">
-                  R$ {(gatewayBalance?.balance || 0).toFixed(2)}
-                </p>
+                <p className="text-3xl font-bold text-primary">R$ {(gatewayBalance?.balance || 0).toFixed(2)}</p>
               )}
             </div>
           </div>
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => refetchBalance()}
-            disabled={isLoadingBalance}
-          >
+          <Button variant="outline" size="icon" onClick={() => refetchBalance()} disabled={isLoadingBalance}>
             <RefreshCw className={`w-4 h-4 ${isLoadingBalance ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -183,23 +140,52 @@ const AdminDashboard = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((stat, index) => (
-          <div
-            key={index}
-            className="bg-card rounded-xl p-6 border border-border"
-          >
+          <div key={index} className="bg-card rounded-xl p-6 border border-border">
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 ${stat.bg} rounded-xl flex items-center justify-center`}>
                 <stat.icon className={`w-6 h-6 ${stat.color}`} />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{stat.label}</p>
-                <p className={`text-2xl font-bold ${stat.color}`}>
-                  {stat.value}
-                </p>
+                <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
               </div>
             </div>
           </div>
         ))}
+      </div>
+
+      {/* PIX Transfers History */}
+      <div className="bg-card rounded-xl p-6 border border-border">
+        <div className="flex items-center gap-3 mb-4">
+          <Send className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-semibold">Últimas Transferências PIX Enviadas</h2>
+        </div>
+        {pixTransfers && pixTransfers.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 text-muted-foreground font-medium">Data</th>
+                  <th className="text-left py-2 text-muted-foreground font-medium">Valor</th>
+                  <th className="text-left py-2 text-muted-foreground font-medium">Chave PIX</th>
+                  <th className="text-left py-2 text-muted-foreground font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pixTransfers.map((transfer) => (
+                  <tr key={transfer.id} className="border-b border-border/50">
+                    <td className="py-3">{format(new Date(transfer.updated_at), "dd/MM/yyyy HH:mm")}</td>
+                    <td className="py-3 font-semibold text-green-500">R$ {Number(transfer.amount).toFixed(2)}</td>
+                    <td className="py-3 text-muted-foreground truncate max-w-[200px]">{transfer.pix_key || "-"}</td>
+                    <td className="py-3"><span className="px-2 py-1 bg-green-500/20 text-green-500 rounded text-xs">Enviado</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-center py-4">Nenhuma transferência PIX encontrada</p>
+        )}
       </div>
     </div>
   );
