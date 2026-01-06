@@ -90,6 +90,8 @@ Deno.serve(async (req) => {
     }
 
     // Create PIX via PoseidonPay API
+    console.log('Creating PIX deposit:', { identifier, amount, name: name || profile?.full_name })
+    
     const poseidonResponse = await fetch('https://app.poseidonpay.site/api/v1/gateway/pix/receive', {
       method: 'POST',
       headers: {
@@ -111,11 +113,13 @@ Deno.serve(async (req) => {
     })
 
     const poseidonData = await poseidonResponse.json()
+    console.log('PoseidonPay response:', JSON.stringify(poseidonData))
 
     if (!poseidonResponse.ok || poseidonData.status === 'FAILED') {
       console.error('PoseidonPay error:', poseidonData)
+      const errorMessage = poseidonData.message || poseidonData.errorDescription || poseidonData.details?.[0]?.error?.message || 'Erro ao criar PIX'
       return new Response(
-        JSON.stringify({ error: poseidonData.message || poseidonData.errorDescription || 'Erro ao criar PIX' }),
+        JSON.stringify({ error: errorMessage, details: poseidonData }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
