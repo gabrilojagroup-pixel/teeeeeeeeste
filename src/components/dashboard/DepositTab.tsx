@@ -457,7 +457,7 @@ const DepositTab = () => {
                 </div>
               )}
 
-              <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, type: "spring" }} className="mb-4 flex justify-center">
+              <div className="mb-4 flex justify-center">
                 {pixData.image ? (
                   <img src={pixData.image} alt="QR Code PIX" className="w-48 h-48 rounded-lg shadow-lg" />
                 ) : pixData.code && pixData.code.length > 0 ? (
@@ -474,7 +474,7 @@ const DepositTab = () => {
                     <QrCode className="w-12 h-12 text-muted-foreground" />
                   </div>
                 )}
-              </motion.div>
+              </div>
 
               <p className="text-sm text-muted-foreground mb-2">Código PIX Copia e Cola</p>
               <div className="bg-muted/50 rounded-lg p-3 mb-4">
