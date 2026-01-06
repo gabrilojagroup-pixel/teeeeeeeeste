@@ -92,6 +92,11 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Apply 10% fee
+    const FEE_PERCENTAGE = 0.10
+    const feeAmount = amount * FEE_PERCENTAGE
+    const amountAfterFee = amount - feeAmount
+
     // Generate unique identifier
     const identifier = `wit_${userId}_${Date.now()}`
     const pixType = detectPixType(pixKey)
@@ -99,7 +104,9 @@ Deno.serve(async (req) => {
     // Get user IP from request
     const userIp = req.headers.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1'
 
-    // Create transfer via PoseidonPay API
+    console.log(`Withdraw: amount=${amount}, fee=${feeAmount}, amountAfterFee=${amountAfterFee}`)
+
+    // Create transfer via PoseidonPay API (send amount after fee)
     const poseidonResponse = await fetch('https://app.poseidonpay.site/api/v1/gateway/transfers', {
       method: 'POST',
       headers: {
@@ -109,7 +116,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         identifier,
-        amount,
+        amount: amountAfterFee, // Send amount after 10% fee deduction
         discountFeeOfReceiver: true,
         pix: {
           type: pixType,
@@ -137,20 +144,20 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Deduct from balance
+    // Deduct full amount from balance (including fee)
     await serviceRoleClient
       .from('profiles')
       .update({ balance: profile.balance - amount })
       .eq('id', profile.id)
 
-    // Create transaction record
+    // Create transaction record with full amount
     await serviceRoleClient.from('transactions').insert({
       user_id: userId,
       type: 'withdrawal',
-      amount,
+      amount, // Record full amount (including fee)
       status: 'pending',
       pix_key: pixKey,
-      description: `PIX Withdraw - ${poseidonData.withdraw?.id}`,
+      description: `PIX Withdraw - ${poseidonData.withdraw?.id} (Taxa: R$ ${feeAmount.toFixed(2)})`,
     })
 
     return new Response(
