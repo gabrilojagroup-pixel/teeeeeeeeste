@@ -46,8 +46,48 @@ Deno.serve(async (req) => {
       )
     }
 
+    const serviceRoleClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+
+    // Get user profile to fetch CPF
+    const { data: profile } = await serviceRoleClient
+      .from('profiles')
+      .select('cpf, full_name, phone')
+      .eq('user_id', userId)
+      .single()
+
+    // Use provided document, profile CPF, or require CPF
+    let userDocument = document || profile?.cpf
+    
+    // Clean and validate CPF format
+    if (userDocument) {
+      userDocument = userDocument.replace(/\D/g, '')
+      if (userDocument.length === 11) {
+        // Format as CPF
+        userDocument = `${userDocument.slice(0, 3)}.${userDocument.slice(3, 6)}.${userDocument.slice(6, 9)}-${userDocument.slice(9)}`
+      }
+    }
+
+    if (!userDocument || userDocument.replace(/\D/g, '').length !== 11) {
+      return new Response(
+        JSON.stringify({ error: 'CPF é obrigatório para realizar depósitos. Por favor, cadastre seu CPF na aba de saques primeiro.', requiresCpf: true }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Generate unique identifier
     const identifier = `dep_${userId}_${Date.now()}`
+
+    // Format phone number
+    let formattedPhone = phone || profile?.phone || '(11) 99999-9999'
+    if (!formattedPhone.includes('(')) {
+      const cleanPhone = formattedPhone.replace(/\D/g, '')
+      if (cleanPhone.length >= 10) {
+        formattedPhone = `(${cleanPhone.slice(0, 2)}) ${cleanPhone.slice(2, 7)}-${cleanPhone.slice(7)}`
+      }
+    }
 
     // Create PIX via PoseidonPay API
     const poseidonResponse = await fetch('https://app.poseidonpay.site/api/v1/gateway/pix/receive', {
@@ -61,10 +101,10 @@ Deno.serve(async (req) => {
         identifier,
         amount,
         client: {
-          name: name || 'Cliente',
+          name: name || profile?.full_name || 'Cliente',
           email: email || 'cliente@email.com',
-          phone: phone || '(11) 99999-9999',
-          document: document || '000.000.000-00',
+          phone: formattedPhone,
+          document: userDocument,
         },
         callbackUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/poseidonpay-webhook`,
       }),
@@ -75,16 +115,10 @@ Deno.serve(async (req) => {
     if (!poseidonResponse.ok || poseidonData.status === 'FAILED') {
       console.error('PoseidonPay error:', poseidonData)
       return new Response(
-        JSON.stringify({ error: poseidonData.errorDescription || 'Erro ao criar PIX' }),
+        JSON.stringify({ error: poseidonData.message || poseidonData.errorDescription || 'Erro ao criar PIX' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
-
-    // Create transaction record
-    const serviceRoleClient = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
 
     const { error: txError } = await serviceRoleClient.from('transactions').insert({
       user_id: userId,
