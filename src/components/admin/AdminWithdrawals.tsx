@@ -23,9 +23,9 @@ const AdminWithdrawals = () => {
         .from("transactions")
         .select(`
           *,
-          profiles!transactions_user_id_fkey (full_name, phone)
+          profiles!transactions_user_id_fkey (full_name, phone, cpf)
         `)
-        .eq("type", "withdraw")
+        .eq("type", "withdrawal")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
