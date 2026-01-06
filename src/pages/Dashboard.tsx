@@ -9,8 +9,9 @@ import AffiliatesTab from "@/components/dashboard/AffiliatesTab";
 import CheckinTab from "@/components/dashboard/CheckinTab";
 import DepositTab from "@/components/dashboard/DepositTab";
 import WithdrawTab from "@/components/dashboard/WithdrawTab";
+import HistoryTab from "@/components/dashboard/HistoryTab";
 
-export type TabType = "home" | "plans" | "affiliates" | "checkin" | "deposit" | "withdraw";
+export type TabType = "home" | "plans" | "affiliates" | "checkin" | "deposit" | "withdraw" | "history";
 
 const Dashboard = () => {
   const { user, loading } = useAuth();
@@ -42,6 +43,8 @@ const Dashboard = () => {
         return <DepositTab />;
       case "withdraw":
         return <WithdrawTab />;
+      case "history":
+        return <HistoryTab />;
       default:
         return <HomeTab />;
     }
