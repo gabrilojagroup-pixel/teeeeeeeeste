@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,17 +10,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Check, X, RefreshCw, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 const AdminWithdrawals = () => {
   const queryClient = useQueryClient();
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    action: 'approve' | 'reject' | null;
+    withdrawal: any;
+  }>({ open: false, action: null, withdrawal: null });
 
   const { data: withdrawals, isLoading, refetch } = useQuery({
     queryKey: ["admin-withdrawals"],
     queryFn: async () => {
-      // First get withdrawals
       const { data: transactions, error } = await supabase
         .from("transactions")
         .select("*")
@@ -28,7 +43,6 @@ const AdminWithdrawals = () => {
 
       if (error) throw error;
 
-      // Then get profiles for each transaction
       const userIds = [...new Set(transactions?.map(t => t.user_id) || [])];
       
       const { data: profiles } = await supabase
@@ -36,7 +50,6 @@ const AdminWithdrawals = () => {
         .select("user_id, full_name, phone, cpf")
         .in("user_id", userIds);
 
-      // Merge data
       return transactions?.map(t => ({
         ...t,
         profile: profiles?.find(p => p.user_id === t.user_id)
@@ -59,11 +72,26 @@ const AdminWithdrawals = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-withdrawals"] });
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
       toast.success(data.message || "Operação realizada com sucesso!");
+      setConfirmDialog({ open: false, action: null, withdrawal: null });
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao processar saque");
+      setConfirmDialog({ open: false, action: null, withdrawal: null });
     },
   });
+
+  const handleConfirm = () => {
+    if (confirmDialog.withdrawal && confirmDialog.action) {
+      processWithdrawMutation.mutate({
+        transactionId: confirmDialog.withdrawal.id,
+        action: confirmDialog.action
+      });
+    }
+  };
+
+  const openConfirmDialog = (withdrawal: any, action: 'approve' | 'reject') => {
+    setConfirmDialog({ open: true, action, withdrawal });
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -85,6 +113,10 @@ const AdminWithdrawals = () => {
       </div>
     );
   }
+
+  const dialogWithdrawal = confirmDialog.withdrawal;
+  const dialogAmount = dialogWithdrawal ? Number(dialogWithdrawal.amount) : 0;
+  const dialogNetAmount = dialogAmount - (dialogAmount * 0.10);
 
   return (
     <div className="space-y-6">
@@ -150,29 +182,15 @@ const AdminWithdrawals = () => {
                           size="sm"
                           variant="default"
                           className="bg-green-600 hover:bg-green-700 text-white"
-                          disabled={processWithdrawMutation.isPending}
-                          onClick={() => processWithdrawMutation.mutate({ 
-                            transactionId: withdrawal.id, 
-                            action: "approve"
-                          })}
+                          onClick={() => openConfirmDialog(withdrawal, "approve")}
                         >
-                          {processWithdrawMutation.isPending ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Check className="w-4 h-4 mr-1" />
-                              Pagar
-                            </>
-                          )}
+                          <Check className="w-4 h-4 mr-1" />
+                          Pagar
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
-                          disabled={processWithdrawMutation.isPending}
-                          onClick={() => processWithdrawMutation.mutate({ 
-                            transactionId: withdrawal.id, 
-                            action: "reject"
-                          })}
+                          onClick={() => openConfirmDialog(withdrawal, "reject")}
                         >
                           <X className="w-4 h-4 mr-1" />
                           Rejeitar
@@ -193,6 +211,54 @@ const AdminWithdrawals = () => {
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, action: null, withdrawal: null })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDialog.action === 'approve' ? '💸 Confirmar Pagamento' : '❌ Confirmar Rejeição'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                {confirmDialog.action === 'approve' ? (
+                  <>
+                    <p>Você está prestes a pagar o saque via PIX:</p>
+                    <div className="bg-muted p-3 rounded-lg space-y-1">
+                      <p><strong>Usuário:</strong> {dialogWithdrawal?.profile?.full_name || "N/A"}</p>
+                      <p><strong>Chave PIX:</strong> {dialogWithdrawal?.pix_key}</p>
+                      <p><strong>Valor solicitado:</strong> R$ {dialogAmount.toFixed(2)}</p>
+                      <p className="text-green-600 font-bold"><strong>Valor a enviar:</strong> R$ {dialogNetAmount.toFixed(2)}</p>
+                    </div>
+                    <p className="text-yellow-600 text-sm">⚠️ Esta ação irá enviar o PIX automaticamente e não pode ser desfeita.</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Você está prestes a rejeitar o saque:</p>
+                    <div className="bg-muted p-3 rounded-lg space-y-1">
+                      <p><strong>Usuário:</strong> {dialogWithdrawal?.profile?.full_name || "N/A"}</p>
+                      <p><strong>Valor:</strong> R$ {dialogAmount.toFixed(2)}</p>
+                    </div>
+                    <p className="text-sm">O saldo será devolvido automaticamente para a conta do usuário.</p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processWithdrawMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirm}
+              disabled={processWithdrawMutation.isPending}
+              className={confirmDialog.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-destructive hover:bg-destructive/90'}
+            >
+              {processWithdrawMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              {confirmDialog.action === 'approve' ? 'Confirmar Pagamento' : 'Confirmar Rejeição'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
