@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, TrendingUp, ArrowUpCircle, ArrowDownCircle, DollarSign, Package, Wallet, RefreshCw, Send, Play } from "lucide-react";
+import { Users, TrendingUp, ArrowUpCircle, ArrowDownCircle, DollarSign, Package, Wallet, RefreshCw, Send, Play, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -126,6 +126,36 @@ const AdminDashboard = () => {
     },
   });
 
+  // Returns history query - grouped by date
+  const { data: returnsHistory } = useQuery({
+    queryKey: ["returns-history"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("id, amount, created_at, user_id")
+        .eq("type", "return")
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      
+      // Group by date
+      const grouped: Record<string, { count: number; total: number; date: string }> = {};
+      
+      data?.forEach((t) => {
+        const date = format(new Date(t.created_at), "yyyy-MM-dd");
+        if (!grouped[date]) {
+          grouped[date] = { count: 0, total: 0, date };
+        }
+        grouped[date].count += 1;
+        grouped[date].total += Number(t.amount);
+      });
+
+      return Object.values(grouped).slice(0, 10);
+    },
+  });
+
   const statCards = [
     { label: "Total Usuários", value: stats?.totalUsers || 0, icon: Users, color: "text-primary", bg: "bg-primary/10" },
     { label: "Pacotes Ativos", value: stats?.activePackages || 0, icon: Package, color: "text-green-500", bg: "bg-green-500/10" },
@@ -247,6 +277,38 @@ const AdminDashboard = () => {
           </div>
         ) : (
           <p className="text-muted-foreground text-center py-4">Nenhuma transferência PIX encontrada</p>
+        )}
+      </div>
+
+      {/* Returns History */}
+      <div className="bg-card rounded-xl p-6 border border-border">
+        <div className="flex items-center gap-3 mb-4">
+          <Calendar className="w-5 h-5 text-green-500" />
+          <h2 className="text-lg font-semibold">Histórico de Rendimentos Processados</h2>
+        </div>
+        {returnsHistory && returnsHistory.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 text-muted-foreground font-medium">Data</th>
+                  <th className="text-left py-2 text-muted-foreground font-medium">Quantidade</th>
+                  <th className="text-left py-2 text-muted-foreground font-medium">Total Creditado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnsHistory.map((day) => (
+                  <tr key={day.date} className="border-b border-border/50">
+                    <td className="py-3">{format(new Date(day.date), "dd/MM/yyyy")}</td>
+                    <td className="py-3 font-semibold">{day.count} rendimento(s)</td>
+                    <td className="py-3 font-semibold text-green-500">R$ {day.total.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-center py-4">Nenhum rendimento processado ainda</p>
         )}
       </div>
     </div>
