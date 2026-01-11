@@ -1,10 +1,41 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, TrendingUp, ArrowUpCircle, ArrowDownCircle, DollarSign, Package, Wallet, RefreshCw, Send } from "lucide-react";
+import { Users, TrendingUp, ArrowUpCircle, ArrowDownCircle, DollarSign, Package, Wallet, RefreshCw, Send, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 const AdminDashboard = () => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Process daily returns mutation
+  const processReturnsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await supabase.functions.invoke("process-daily-returns");
+      
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Rendimentos Processados!",
+        description: `${data.processedReturns} rendimentos creditados, ${data.completedInvestments} investimentos finalizados.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao processar",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Stats query
   const { data: stats } = useQuery({
     queryKey: ["admin-stats"],
@@ -114,27 +145,58 @@ const AdminDashboard = () => {
         <p className="text-muted-foreground">Visão geral do sistema</p>
       </div>
 
-      {/* Gateway Balance Card */}
-      <div className="bg-gradient-to-r from-primary/20 to-primary/5 rounded-xl p-6 border border-primary/30">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-primary/20 rounded-xl flex items-center justify-center">
-              <Wallet className="w-7 h-7 text-primary" />
+      {/* Action Cards Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Gateway Balance Card */}
+        <div className="bg-gradient-to-r from-primary/20 to-primary/5 rounded-xl p-6 border border-primary/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-primary/20 rounded-xl flex items-center justify-center">
+                <Wallet className="w-7 h-7 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Saldo Gateway PoseidonPay</p>
+                {isLoadingBalance ? (
+                  <p className="text-2xl font-bold text-primary animate-pulse">Carregando...</p>
+                ) : gatewayBalance?.error ? (
+                  <p className="text-lg font-semibold text-destructive">Erro ao carregar</p>
+                ) : (
+                  <p className="text-3xl font-bold text-primary">R$ {(gatewayBalance?.balance || 0).toFixed(2)}</p>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Saldo Gateway PoseidonPay</p>
-              {isLoadingBalance ? (
-                <p className="text-2xl font-bold text-primary animate-pulse">Carregando...</p>
-              ) : gatewayBalance?.error ? (
-                <p className="text-lg font-semibold text-destructive">Erro ao carregar</p>
-              ) : (
-                <p className="text-3xl font-bold text-primary">R$ {(gatewayBalance?.balance || 0).toFixed(2)}</p>
-              )}
-            </div>
+            <Button variant="outline" size="icon" onClick={() => refetchBalance()} disabled={isLoadingBalance}>
+              <RefreshCw className={`w-4 h-4 ${isLoadingBalance ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
-          <Button variant="outline" size="icon" onClick={() => refetchBalance()} disabled={isLoadingBalance}>
-            <RefreshCw className={`w-4 h-4 ${isLoadingBalance ? 'animate-spin' : ''}`} />
-          </Button>
+        </div>
+
+        {/* Process Daily Returns Card */}
+        <div className="bg-gradient-to-r from-green-500/20 to-green-500/5 rounded-xl p-6 border border-green-500/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-7 h-7 text-green-500" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Processar Rendimentos</p>
+                <p className="text-lg font-semibold text-green-500">Creditar rendimentos diários</p>
+                <p className="text-xs text-muted-foreground">Executa a cada 24h automaticamente</p>
+              </div>
+            </div>
+            <Button 
+              onClick={() => processReturnsMutation.mutate()} 
+              disabled={processReturnsMutation.isPending}
+              className="bg-green-500 hover:bg-green-600 text-white"
+            >
+              {processReturnsMutation.isPending ? (
+                <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
+              Processar Agora
+            </Button>
+          </div>
         </div>
       </div>
 

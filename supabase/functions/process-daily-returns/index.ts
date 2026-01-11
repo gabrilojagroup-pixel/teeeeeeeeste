@@ -149,6 +149,20 @@ Deno.serve(async (req) => {
         continue
       }
 
+      // Send notification to user
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: investment.user_id,
+          title: 'Rendimento Creditado! 💰',
+          message: `Seu rendimento diário de R$ ${dailyReturn.toFixed(2)} foi creditado no seu saldo.`,
+          type: 'return'
+        })
+
+      if (notificationError) {
+        console.error(`Failed to send notification: ${notificationError.message}`)
+      }
+
       processedReturns.push(investment.id)
     }
 
