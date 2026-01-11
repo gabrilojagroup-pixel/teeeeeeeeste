@@ -28,7 +28,7 @@ const AdminWithdrawals = () => {
   const queryClient = useQueryClient();
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
-    action: 'approve' | 'reject' | null;
+    action: 'approve' | 'reject' | 'manual' | null;
     withdrawal: any;
   }>({ open: false, action: null, withdrawal: null });
 
@@ -58,7 +58,7 @@ const AdminWithdrawals = () => {
   });
 
   const processWithdrawMutation = useMutation({
-    mutationFn: async ({ transactionId, action }: { transactionId: string; action: 'approve' | 'reject' }) => {
+    mutationFn: async ({ transactionId, action }: { transactionId: string; action: 'approve' | 'reject' | 'manual' }) => {
       const { data, error } = await supabase.functions.invoke('admin-process-withdraw', {
         body: { transactionId, action }
       });
@@ -89,7 +89,7 @@ const AdminWithdrawals = () => {
     }
   };
 
-  const openConfirmDialog = (withdrawal: any, action: 'approve' | 'reject') => {
+  const openConfirmDialog = (withdrawal: any, action: 'approve' | 'reject' | 'manual') => {
     setConfirmDialog({ open: true, action, withdrawal });
   };
 
@@ -177,15 +177,15 @@ const AdminWithdrawals = () => {
                   </TableCell>
                   <TableCell>
                     {withdrawal.status === "pending" && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Button
                           size="sm"
-                          variant="default"
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => openConfirmDialog(withdrawal, "approve")}
+                          variant="outline"
+                          className="border-blue-500 text-blue-500 hover:bg-blue-500/10"
+                          onClick={() => openConfirmDialog(withdrawal, "manual")}
                         >
                           <Check className="w-4 h-4 mr-1" />
-                          Pagar
+                          Manual
                         </Button>
                         <Button
                           size="sm"
@@ -216,11 +216,22 @@ const AdminWithdrawals = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmDialog.action === 'approve' ? '💸 Confirmar Pagamento' : '❌ Confirmar Rejeição'}
+              {confirmDialog.action === 'manual' ? '✋ Aprovar Manualmente' : confirmDialog.action === 'approve' ? '💸 Confirmar Pagamento' : '❌ Confirmar Rejeição'}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
-                {confirmDialog.action === 'approve' ? (
+                {confirmDialog.action === 'manual' ? (
+                  <>
+                    <p>Você está aprovando este saque <strong>manualmente</strong>:</p>
+                    <div className="bg-muted p-3 rounded-lg space-y-1">
+                      <p><strong>Usuário:</strong> {dialogWithdrawal?.profile?.full_name || "N/A"}</p>
+                      <p><strong>Chave PIX:</strong> <span className="font-mono text-sm">{dialogWithdrawal?.pix_key}</span></p>
+                      <p><strong>Valor solicitado:</strong> R$ {dialogAmount.toFixed(2)}</p>
+                      <p className="text-green-600 font-bold"><strong>Valor a enviar:</strong> R$ {dialogNetAmount.toFixed(2)}</p>
+                    </div>
+                    <p className="text-blue-600 text-sm">ℹ️ Faça o PIX manualmente na PoseidonPay e depois confirme aqui.</p>
+                  </>
+                ) : confirmDialog.action === 'approve' ? (
                   <>
                     <p>Você está prestes a pagar o saque via PIX:</p>
                     <div className="bg-muted p-3 rounded-lg space-y-1">
@@ -249,12 +260,12 @@ const AdminWithdrawals = () => {
             <AlertDialogAction
               onClick={handleConfirm}
               disabled={processWithdrawMutation.isPending}
-              className={confirmDialog.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-destructive hover:bg-destructive/90'}
+              className={confirmDialog.action === 'manual' ? 'bg-blue-600 hover:bg-blue-700' : confirmDialog.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-destructive hover:bg-destructive/90'}
             >
               {processWithdrawMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : null}
-              {confirmDialog.action === 'approve' ? 'Confirmar Pagamento' : 'Confirmar Rejeição'}
+              {confirmDialog.action === 'manual' ? 'Confirmar Aprovação Manual' : confirmDialog.action === 'approve' ? 'Confirmar Pagamento' : 'Confirmar Rejeição'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

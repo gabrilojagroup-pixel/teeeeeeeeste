@@ -132,6 +132,41 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Manual approval - just mark as approved without calling PoseidonPay
+    if (action === 'manual') {
+      const amount = Number(transaction.amount)
+      const feeAmount = amount * 0.10
+      const amountAfterFee = amount - feeAmount
+
+      console.log(`Processing MANUAL approval: amount=${amount}, fee=${feeAmount}, net=${amountAfterFee}`)
+
+      // Update transaction status
+      await serviceRoleClient
+        .from('transactions')
+        .update({ 
+          status: 'approved',
+          description: `Aprovado manualmente pelo admin`
+        })
+        .eq('id', transactionId)
+
+      // Notify user
+      await serviceRoleClient.from('notifications').insert({
+        user_id: transaction.user_id,
+        title: 'Saque aprovado!',
+        message: `Seu saque de R$ ${amount.toFixed(2)} foi aprovado! Valor líquido de R$ ${amountAfterFee.toFixed(2)} será enviado para sua chave PIX.`,
+        type: 'success',
+      })
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Saque aprovado manualmente! Faça o PIX na PoseidonPay.',
+          netAmount: amountAfterFee
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     if (action === 'approve') {
       // Calculate fee and net amount
       const amount = Number(transaction.amount)
