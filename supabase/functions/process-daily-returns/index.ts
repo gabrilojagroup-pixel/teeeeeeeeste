@@ -104,10 +104,10 @@ Deno.serve(async (req) => {
 
       const dailyReturn = Number(investment.daily_return)
 
-      // Add return to accumulated_balance
+      // Add return to balance (saldo disponível)
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('accumulated_balance')
+        .select('balance, accumulated_balance')
         .eq('user_id', investment.user_id)
         .maybeSingle()
 
@@ -116,12 +116,16 @@ Deno.serve(async (req) => {
         continue
       }
 
-      const newAccumulatedBalance = Number(profile.accumulated_balance) + dailyReturn
+      const newBalance = Number(profile.balance || 0) + dailyReturn
+      const newAccumulatedBalance = Number(profile.accumulated_balance || 0) + dailyReturn
 
-      // Update accumulated balance
+      // Update balance and accumulated balance
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ accumulated_balance: newAccumulatedBalance })
+        .update({ 
+          balance: newBalance,
+          accumulated_balance: newAccumulatedBalance 
+        })
         .eq('user_id', investment.user_id)
 
       if (updateError) {

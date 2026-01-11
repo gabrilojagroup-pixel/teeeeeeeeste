@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.admin-process-withdraw]
 verify_jwt = false
+
+[functions.get-gateway-balance]
+verify_jwt = false
